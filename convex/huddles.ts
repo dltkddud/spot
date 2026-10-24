@@ -2,7 +2,6 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { record } from "./activity";
-import { connect } from "./connections";
 
 // A huddle is 2-3 attendees in the same speaker's line who share an interest
 // and meet the speaker together. Matching, answers, and line position all
@@ -82,8 +81,6 @@ async function addMember(ctx: MutationCtx, huddleId: Id<"huddles">, c: Candidate
     userId: c.user._id,
     requestId: c.request._id,
     response: "pending",
-    stayAnswered: [],
-    stayYes: [],
   });
 }
 
@@ -252,31 +249,6 @@ export const setGroupStatus = mutation({
   },
 });
 
-// After meeting: "Stay connected with Sara?" Both saying yes connects them.
-export const stayConnected = mutation({
-  args: { huddleId: v.id("huddles"), userId: v.id("users"), otherId: v.id("users"), yes: v.boolean() },
-  returns: v.null(),
-  handler: async (ctx, { huddleId, userId, otherId, yes }) => {
-    const huddle = await ctx.db.get("huddles", huddleId);
-    if (!huddle || huddle.status !== "met") throw new ConvexError("This huddle hasn't met yet.");
-    const members = await membersOf(ctx, huddleId);
-    const me = members.find((m) => m.userId === userId);
-    const other = members.find((m) => m.userId === otherId);
-    if (!me || !other || userId === otherId) throw new ConvexError("You're not in this huddle.");
-
-    await ctx.db.patch("huddleMembers", me._id, {
-      stayAnswered: [...new Set([...me.stayAnswered, otherId])],
-      stayYes: yes ? [...new Set([...me.stayYes, otherId])] : me.stayYes.filter((id) => id !== otherId),
-    });
-    // Demo people can't answer, so they say yes back.
-    const otherUser = await ctx.db.get("users", otherId);
-    if (yes && (other.stayYes.includes(userId) || otherUser?.seedKey)) {
-      await connect(ctx, huddle.eventId, userId, otherId, "huddle");
-    }
-    return null;
-  },
-});
-
 // Demo control: someone in my line who shares an interest wants to huddle.
 // Picks a demo attendee, puts them in the same line if needed, and proposes.
 export const demoPropose = mutation({
@@ -354,31 +326,23 @@ const memberValidator = v.object({
 const huddleValidator = v.object({
   _id: v.id("huddles"),
   panelId: v.id("users"),
-  status: v.union(v.literal("proposed"), v.literal("formed"), v.literal("met")),
+  status: v.union(v.literal("proposed"), v.literal("formed")),
   sharedInterests: v.array(v.string()),
   members: v.array(memberValidator),
-  // Other members I still need to answer "Stay connected?" for.
-  stayPending: v.array(v.id("users")),
 });
 
-async function view(ctx: QueryCtx, huddle: Huddle, viewerId?: Id<"users">) {
+async function view(ctx: QueryCtx, huddle: Huddle) {
   const members = await membersOf(ctx, huddle._id);
-  const me = members.find((m) => m.userId === viewerId);
   return {
     _id: huddle._id,
     panelId: huddle.panelId,
-    status: huddle.status as "proposed" | "formed" | "met",
+    status: huddle.status as "proposed" | "formed",
     sharedInterests: huddle.sharedInterests,
     members: members.map(({ userId, requestId, response }) => ({ userId, requestId, response })),
-    stayPending:
-      huddle.status === "met" && me
-        ? members.map((m) => m.userId).filter((id) => id !== viewerId && !me.stayAnswered.includes(id))
-        : [],
   };
 }
 
-// An attendee's open huddles, plus met ones still waiting on "Stay connected?".
-// Only names come through user ids; nobody's note is included.
+// An attendee's open huddles. Only names come through user ids; nobody's note is included.
 export const forAttendee = query({
   args: { attendeeId: v.id("users") },
   returns: v.array(huddleValidator),
@@ -391,9 +355,7 @@ export const forAttendee = query({
     const out = [];
     for (const m of rows) {
       const huddle = await ctx.db.get("huddles", m.huddleId);
-      if (!huddle) continue;
-      const shown = await view(ctx, huddle, attendeeId);
-      if (isOpen(huddle) || shown.stayPending.length > 0) out.push(shown);
+      if (huddle && isOpen(huddle)) out.push(await view(ctx, huddle));
     }
     return out;
   },

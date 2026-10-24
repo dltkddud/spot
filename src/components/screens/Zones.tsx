@@ -4,10 +4,10 @@ import { sharedInterests } from "@/lib/recommend";
 import { useApp } from "@/lib/store";
 import { isStale, minutesAgo } from "@/lib/time";
 import type { User } from "@/lib/types";
-import { CrowdLegend, FloorPlan } from "../FloorPlan";
+import { FloorPlan } from "../FloorPlan";
 import { ZoneMark } from "../ZoneIcon";
 import { useMyPeople } from "../Connections";
-import { Avatar, Button, CrowdBadge, Header, Icon, StatusPill, StillHereAsk } from "../ui";
+import { Avatar, Button, Header, Icon, StatusPill } from "../ui";
 import { ZonePreview } from "./ZonePicker";
 
 export function Zones() {
@@ -20,12 +20,9 @@ export function Zones() {
     <>
       <Header title="Zones" />
       <main className="px-5 pb-28 pt-5">
-        <p className="text-sm text-muted">Tap a zone to see who&apos;s there. Orange zones are the busiest right now.</p>
+        <p className="text-sm text-muted">Tap a zone to see who&apos;s there.</p>
         <div className="mt-4">
-          <FloorPlan zones={state.zones} activity={state.zoneActivity} myZoneId={me.zoneId} onSelect={open} />
-        </div>
-        <div className="mt-2">
-          <CrowdLegend />
+          <FloorPlan zones={state.zones} myZoneId={me.zoneId} onSelect={open} />
         </div>
 
         <div className="mt-5 space-y-3">
@@ -57,7 +54,6 @@ export function Zones() {
                   </span>
                   <span className="block truncate text-xs text-muted">{z.landmark}</span>
                   <span className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <CrowdBadge level={state.zoneActivity[z.id] ?? "quiet"} />
                     {panels.slice(0, 3).map((p) => (
                       <Avatar key={p.id} user={p} size={24} />
                     ))}
@@ -135,12 +131,9 @@ function PersonCard({ person }: { person: User }) {
         Look for <span className="font-semibold text-ink">{person.outfit}</span>
       </p>
 
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4">
-        <span className={`text-xs ${stale ? "font-bold text-busy-ink" : "text-muted"}`}>
-          Updated {minutesAgo(person.updatedAt, state.now)}
-        </span>
-        <StillHereAsk user={person} />
-      </div>
+      <p className={`mt-auto pt-4 text-xs ${stale ? "font-bold text-busy-ink" : "text-muted"}`}>
+        Updated {minutesAgo(person.updatedAt, state.now)}
+      </p>
 
       {person.role === "panel" && (
         <Button

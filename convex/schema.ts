@@ -39,7 +39,8 @@ export default defineSchema({
     updatedAt: v.number(),
     // Demo people created by seed keep their mockData id here (e.g. "p-dana").
     seedKey: v.optional(v.string()),
-    // Someone asked "Still here?" at this time and it hasn't been answered yet.
+    // Removed feature ("Still here?"). Cleared by the remove-still-here-and-stay migration
+    // in seed.ts; delete this line once both deployments have run it.
     locationCheckAt: v.optional(v.number()),
     // false = never suggest huddles to me. Missing means yes.
     openToHuddles: v.optional(v.boolean()),
@@ -100,9 +101,10 @@ export default defineSchema({
     userId: v.id("users"),
     requestId: v.id("chatRequests"),
     response: v.union(v.literal("pending"), v.literal("yes"), v.literal("no")),
-    // After meeting: other members this person answered "Stay connected?" for, and said yes to.
-    stayAnswered: v.array(v.id("users")),
-    stayYes: v.array(v.id("users")),
+    // Removed feature ("Stay connected?" after a huddle). Cleared by the
+    // remove-still-here-and-stay migration in seed.ts; delete once both deployments have run it.
+    stayAnswered: v.optional(v.array(v.id("users"))),
+    stayYes: v.optional(v.array(v.id("users"))),
   })
     .index("by_huddle", ["huddleId"])
     .index("by_user", ["userId"])
@@ -118,6 +120,12 @@ export default defineSchema({
     by: v.optional(v.id("users")),
     createdAt: v.number(),
   }).index("by_user_and_other", ["userId", "otherId"]),
+
+  // One row per data migration that has run, so seed.ensure runs each only once.
+  migrations: defineTable({
+    name: v.string(),
+    ranAt: v.number(),
+  }).index("by_name", ["name"]),
 
   activity: defineTable({
     eventId: v.id("events"),

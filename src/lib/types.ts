@@ -34,7 +34,6 @@ export type User = {
   requestsPaused: boolean;
   updatedAt: number;
   seedKey?: string;
-  locationCheckAt?: number;
   openToHuddles?: boolean;
   // Who sees my zone. Others' visible is already worked out for me by the server.
   shareWith?: ShareWith;
@@ -46,12 +45,11 @@ export type ShareWith = "everyone" | "connections" | "nobody";
 
 export type Connection = {
   userId: string;
+  // "huddle" only on older connections; new ones come from codes and links.
   source: "huddle" | "code" | "demo";
   createdAt: number;
 };
 
-// How busy a zone is. Counts hidden people too, so only a level is shared.
-export type CrowdLevel = "quiet" | "some" | "busy";
 
 export type ChatRequest = {
   id: string;
@@ -77,11 +75,9 @@ export type HuddleMember = {
 export type Huddle = {
   id: string;
   panelId: string;
-  status: "proposed" | "formed" | "met";
+  status: "proposed" | "formed";
   sharedInterests: string[];
   members: HuddleMember[];
-  // Other members I still need to answer "Stay connected?" for.
-  stayPending: string[];
 };
 
 export type ActivityType =

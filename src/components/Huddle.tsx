@@ -39,8 +39,7 @@ function Person({ user }: { user: User }) {
   );
 }
 
-// An attendee's view of one huddle: the suggestion, waiting on others, ready,
-// or "Stay connected?" after meeting.
+// An attendee's view of one huddle: the suggestion, waiting on others, or ready.
 export function HuddleCard({ huddle, compact }: { huddle: Huddle; compact?: boolean }) {
   const { state, me, dispatch } = useApp();
   if (!me) return null;
@@ -56,45 +55,6 @@ export function HuddleCard({ huddle, compact }: { huddle: Huddle; compact?: bool
   const topic = joinNames(huddle.sharedInterests.slice(0, 2));
   const myRequest = state.requests.find((r) => r.id === mine.requestId);
   const shell = "rounded-2xl border-2 border-primary bg-primary-soft p-4";
-
-  if (huddle.status === "met") {
-    return (
-      <section className={shell}>
-        <p className="flex items-center gap-2 text-xs font-bold text-primary-ink">
-          <Icon name="users" size={16} />
-          You met {first(panel)} together
-        </p>
-        <div className="mt-3 space-y-3">
-          {others
-            .filter((o) => huddle.stayPending.includes(o.userId))
-            .map((o) => (
-              <div key={o.userId} className="rounded-xl bg-surface p-3">
-                <p className="font-extrabold">Stay connected with {first(o.user)}?</p>
-                <p className="mt-0.5 text-xs text-muted">
-                  If you both say yes, you&apos;ll see each other&apos;s zone at events.
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <Button
-                    icon="check"
-                    className="px-3 text-sm"
-                    onClick={() => dispatch({ type: "stayConnected", huddleId: huddle.id, otherId: o.userId, yes: true })}
-                  >
-                    Yes
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="px-3 text-sm"
-                    onClick={() => dispatch({ type: "stayConnected", huddleId: huddle.id, otherId: o.userId, yes: false })}
-                  >
-                    No thanks
-                  </Button>
-                </div>
-              </div>
-            ))}
-        </div>
-      </section>
-    );
-  }
 
   if (huddle.status === "formed") {
     const accepted = myRequest?.status === "accepted";
@@ -175,7 +135,7 @@ export function HuddleCard({ huddle, compact }: { huddle: Huddle; compact?: bool
 
 // The open huddle a request belongs to, from the attendee's side.
 export function huddleForRequest(huddles: Huddle[], request: ChatRequest) {
-  return huddles.find((h) => h.status !== "met" && h.members.some((m) => m.requestId === request.id));
+  return huddles.find((h) => h.members.some((m) => m.requestId === request.id));
 }
 
 // The speaker's view: a whole huddle as one card, with every member's note.

@@ -5,7 +5,7 @@ import { sharedInterests } from "@/lib/recommend";
 import { positionInQueue, queueFor, useApp } from "@/lib/store";
 import { HuddleCard, huddleForRequest } from "../Huddle";
 import { isStale, minutesAgo, minutesUntil } from "@/lib/time";
-import { Avatar, Button, Header, inputClass, StatusPill, StillHereAsk, ZoneBadge } from "../ui";
+import { Avatar, Button, Header, inputClass, StatusPill, ZoneBadge } from "../ui";
 
 export function PanelDetail({ panelId }: { panelId: string }) {
   const { state, me, dispatch, back } = useApp();
@@ -80,12 +80,9 @@ export function PanelDetail({ panelId }: { panelId: string }) {
             <p className="mt-0.5 text-lg font-extrabold">{panel.outfit}</p>
           </div>
           {stale && (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm text-busy-ink">
-                This hasn&apos;t been updated in a while, so {first} may have moved.
-              </p>
-              <StillHereAsk user={panel} />
-            </div>
+            <p className="mt-3 text-sm text-busy-ink">
+              This hasn&apos;t been updated in a while, so {first} may have moved.
+            </p>
           )}
         </section>
 

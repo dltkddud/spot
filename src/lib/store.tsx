@@ -22,7 +22,6 @@ import type {
   ActivityType,
   ChatRequest,
   Connection,
-  CrowdLevel,
   Huddle,
   RequestStatus,
   EventInfo,
@@ -75,7 +74,6 @@ type State = LocalState & {
   zones: Zone[];
   users: User[];
   requests: ChatRequest[];
-  zoneActivity: Record<string, CrowdLevel>;
   // My huddles as an attendee, and the formed huddles in my line as a speaker.
   huddles: Huddle[];
   // Event-wide counts kept on the server (huddles formed, connections made).
@@ -92,11 +90,8 @@ type Action =
   | { type: "updateMe"; patch: Partial<User> }
   | { type: "setStatus"; status: Exclude<Status, "leaving"> }
   | { type: "setLeaving"; minutes: number }
-  | { type: "askStillHere"; userId: string }
-  | { type: "confirmZone" }
   | { type: "huddleRespond"; huddleId: string; accept: boolean }
   | { type: "setHuddleStatus"; huddleId: string; status: "accepted" | "declined" | "met" | "missed" }
-  | { type: "stayConnected"; huddleId: string; otherId: string; yes: boolean }
   | { type: "simulateHuddle" }
   | { type: "connectCode"; code: string }
   | { type: "removeConnection"; userId: string }
@@ -281,11 +276,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const createUser = useMutation(api.users.create);
   const updateUser = useMutation(api.users.update);
   const setUserStatus = useMutation(api.users.setStatus);
-  const askStillHere = useMutation(api.users.askStillHere);
-  const confirmZone = useMutation(api.users.confirmZone);
   const huddleRespond = useMutation(api.huddles.respond);
   const setHuddleStatus = useMutation(api.huddles.setGroupStatus);
-  const stayConnected = useMutation(api.huddles.stayConnected);
   const demoHuddle = useMutation(api.huddles.demoPropose);
   const ensureCode = useMutation(api.connections.ensureCode);
   const connectByCode = useMutation(api.connections.connectByCode);
@@ -309,11 +301,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const viewerId = local.booted ? (local.currentUserId as Id<"users"> | null) : null;
-  const crowd = useLatest(useQuery(api.events.zoneActivity, eventId ? { eventId } : "skip"));
-  const zoneActivity = useMemo<Record<string, CrowdLevel>>(
-    () => Object.fromEntries((crowd ?? []).map((z) => [z.zoneId, z.level])),
-    [crowd],
-  );
   const openLines = useLatest(useQuery(api.chatRequests.activeByEvent, eventId ? { eventId } : "skip"));
   const myLine = useLatest(useQuery(api.chatRequests.forPanel, viewerId ? { panelId: viewerId } : "skip"));
   const mySent = useLatest(useQuery(api.chatRequests.forAttendee, viewerId ? { attendeeId: viewerId } : "skip"));
@@ -553,21 +540,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (meId) run(setUserStatus({ id: meId, status: "leaving", leavingInMin: action.minutes }));
           return;
 
-        case "askStillHere": {
-          const target = users.find((u) => u.id === action.userId);
-          if (!target) return;
-          run(
-            askStillHere({ targetId: target.id as Id<"users"> }).then(() =>
-              localDispatch({ type: "toast", message: `We asked ${target.name.split(" ")[0]} to confirm their zone.` }),
-            ),
-          );
-          return;
-        }
-
-        case "confirmZone":
-          if (meId) run(confirmZone({ id: meId }));
-          return;
-
         case "huddleRespond":
           if (meId) run(huddleRespond({ huddleId: action.huddleId as Id<"huddles">, userId: meId, accept: action.accept }));
           return;
@@ -585,18 +557,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           );
           return;
         }
-
-        case "stayConnected":
-          if (!meId) return;
-          run(
-            stayConnected({
-              huddleId: action.huddleId as Id<"huddles">,
-              userId: meId,
-              otherId: action.otherId as Id<"users">,
-              yes: action.yes,
-            }),
-          );
-          return;
 
         case "simulateHuddle":
           if (meId) run(demoHuddle({ attendeeId: meId }));
@@ -711,11 +671,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createUser,
       updateUser,
       setUserStatus,
-      askStillHere,
-      confirmZone,
       huddleRespond,
       setHuddleStatus,
-      stayConnected,
       demoHuddle,
       connectByCode,
       removeConnection,
@@ -736,7 +693,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppContextValue | null>(() => {
     if (!event || !users) return null;
-    const state: State = { ...local, event, zones, users, requests, zoneActivity, huddles, stats, connections };
+    const state: State = { ...local, event, zones, users, requests, huddles, stats, connections };
     const me = users.find((u) => u.id === local.currentUserId);
     return {
       state,
@@ -746,7 +703,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       navigate: (screen, replace) => dispatch({ type: "navigate", screen, replace }),
       back: () => dispatch({ type: "back" }),
     };
-  }, [local, event, zones, users, requests, zoneActivity, huddles, stats, connections, dispatch]);
+  }, [local, event, zones, users, requests, huddles, stats, connections, dispatch]);
 
   if (!event || !users || !local.booted) return <div className="min-h-[var(--app-h)] bg-bg" />;
 

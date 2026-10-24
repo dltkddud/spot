@@ -18,11 +18,6 @@
   --primary-soft-hover: #d0e3ff;
   --primary-ink: #1554bf;
   --on-primary: #ffffff;
-  --crowd: #f07a1a;
-  --crowd-soft: #ffecd9;
-  --crowd-ink: #a94c06;
-  --quiet: #a3adbf;
-  --quiet-soft: #eef1f6;
   --go: #0e9f55;
   --go-soft: #dcf4e7;
   --busy: #dc3a41;
@@ -53,11 +48,6 @@
     --primary-soft-hover: #1e3c70;
     --primary-ink: #a8c8ff;
     --on-primary: #061430;
-    --crowd: #ff9640;
-    --crowd-soft: #3d2410;
-    --crowd-ink: #ffb070;
-    --quiet: #5d6b85;
-    --quiet-soft: #1b2741;
     --go: #2bc473;
     --go-soft: #12301f;
     --busy: #ff646a;
@@ -89,11 +79,6 @@
   --primary-soft-hover: #1e3c70;
   --primary-ink: #a8c8ff;
   --on-primary: #061430;
-  --crowd: #ff9640;
-  --crowd-soft: #3d2410;
-  --crowd-ink: #ffb070;
-  --quiet: #5d6b85;
-  --quiet-soft: #1b2741;
   --go: #2bc473;
   --go-soft: #12301f;
   --busy: #ff646a;
@@ -124,11 +109,6 @@
   --color-primary-soft-hover: var(--primary-soft-hover);
   --color-primary-ink: var(--primary-ink);
   --color-on-primary: var(--on-primary);
-  --color-crowd: var(--crowd);
-  --color-crowd-soft: var(--crowd-soft);
-  --color-crowd-ink: var(--crowd-ink);
-  --color-quiet: var(--quiet);
-  --color-quiet-soft: var(--quiet-soft);
   --color-go: var(--go);
   --color-go-soft: var(--go-soft);
   --color-busy: var(--busy);
@@ -228,19 +208,3 @@ body::before {
   filter: invert(0.88) hue-rotate(180deg) saturate(0.8);
 }
 
-@keyframes crowd-pulse {
-  0% {
-    transform: scale(0.6);
-    opacity: 0.55;
-  }
-  100% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
-}
-
-.crowd-pulse {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: crowd-pulse 1.8s ease-out infinite;
-}

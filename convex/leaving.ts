@@ -59,7 +59,6 @@ export const leave = internalMutation({
       visible: false,
       shareWith: "nobody",
       zoneId: undefined,
-      locationCheckAt: undefined,
       updatedAt: Date.now(),
     });
     return null;

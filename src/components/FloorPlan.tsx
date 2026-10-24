@@ -2,20 +2,8 @@
 
 import type { KeyboardEvent } from "react";
 import { FLOORPLAN, ZONE_MAP } from "@/lib/floorplan";
-import type { CrowdLevel, Zone } from "@/lib/types";
+import type { Zone } from "@/lib/types";
 import { ICON_STROKE, iconFor, PIN_PATH } from "./ZoneIcon";
-
-const pinFill: Record<CrowdLevel, string> = {
-  busy: "var(--crowd)",
-  some: "var(--primary)",
-  quiet: "var(--quiet)",
-};
-
-const pinText: Record<CrowdLevel, string> = {
-  busy: "#1b1205",
-  some: "var(--on-primary)",
-  quiet: "var(--ink)",
-};
 
 const FOCUS = { width: 560, height: 300 };
 
@@ -23,7 +11,6 @@ const clamp = (n: number, max: number) => Math.min(Math.max(n, 0), max);
 
 type Props = {
   zones: Zone[];
-  activity: Record<string, CrowdLevel>;
   selectedId?: string;
   myZoneId?: string;
   onSelect?: (zoneId: string) => void;
@@ -31,7 +18,7 @@ type Props = {
   focusId?: string;
 };
 
-export function FloorPlan({ zones, activity, selectedId, myZoneId, onSelect, focusId }: Props) {
+export function FloorPlan({ zones, selectedId, myZoneId, onSelect, focusId }: Props) {
   const focus = focusId ? ZONE_MAP[zones.find((z) => z.id === focusId)?.code ?? ""] : undefined;
   const vb = focus
     ? {
@@ -62,7 +49,6 @@ export function FloorPlan({ zones, activity, selectedId, myZoneId, onSelect, foc
       {shown.map((z) => {
         const pos = ZONE_MAP[z.code];
         if (!pos) return null;
-        const level = activity[z.id] ?? "quiet";
         const selected = z.id === selectedId;
         const k = scale * (selected ? 1.3 : 1);
         const select = onSelect ? () => onSelect(z.id) : undefined;
@@ -84,19 +70,18 @@ export function FloorPlan({ zones, activity, selectedId, myZoneId, onSelect, foc
             onKeyDown={onKeyDown}
             className={select ? "cursor-pointer" : undefined}
           >
-            {level === "busy" && <circle r={13 * k} fill="var(--crowd)" className="crowd-pulse" />}
-            <ellipse rx={7 * k} ry={2.6 * k} fill={pinFill[level]} opacity={0.35} />
+            <ellipse rx={7 * k} ry={2.6 * k} fill="var(--primary)" opacity={0.3} />
             <g transform={`translate(${-12 * k} ${-29 * k}) scale(${k})`} className="transition-transform">
               <path
                 d={PIN_PATH}
-                fill={pinFill[level]}
+                fill="var(--primary)"
                 stroke={selected ? "var(--ink)" : "var(--surface)"}
                 strokeWidth={selected ? 2.4 : 1.6}
               />
               <g
                 transform="translate(5 4.5) scale(0.5833)"
                 fill="none"
-                stroke={pinText[level]}
+                stroke="var(--on-primary)"
                 strokeWidth={ICON_STROKE * 1.2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -126,23 +111,5 @@ export function FloorPlan({ zones, activity, selectedId, myZoneId, onSelect, foc
         );
       })}
     </svg>
-  );
-}
-
-export function CrowdLegend() {
-  const items: [CrowdLevel, string][] = [
-    ["busy", "Busy"],
-    ["some", "Some people"],
-    ["quiet", "Quiet"],
-  ];
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-muted">
-      {items.map(([level, label]) => (
-        <span key={level} className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: pinFill[level] }} aria-hidden />
-          {label}
-        </span>
-      ))}
-    </div>
   );
 }

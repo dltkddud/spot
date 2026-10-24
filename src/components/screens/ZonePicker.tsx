@@ -3,8 +3,8 @@
 import { useState, type ReactNode } from "react";
 import { homeFor, useApp } from "@/lib/store";
 import type { Zone } from "@/lib/types";
-import { CrowdLegend, FloorPlan } from "../FloorPlan";
-import { Button, CrowdBadge, Header, SectionTitle } from "../ui";
+import { FloorPlan } from "../FloorPlan";
+import { Button, Header, SectionTitle } from "../ui";
 import { ZoneMark } from "../ZoneIcon";
 
 function peopleHere(n: number) {
@@ -16,17 +16,14 @@ export function ZonePreview({ zone, here, action }: { zone: Zone; here: number; 
   const { state } = useApp();
   return (
     <section className="overflow-hidden rounded-2xl border border-line bg-surface">
-      <FloorPlan zones={state.zones} activity={state.zoneActivity} focusId={zone.id} selectedId={zone.id} />
+      <FloorPlan zones={state.zones} focusId={zone.id} selectedId={zone.id} />
       <div className="p-4">
         <div className="flex items-start gap-3">
           <ZoneMark code={zone.code} size={52} />
           <div className="min-w-0 flex-1 pl-1">
             <p className="text-lg font-extrabold leading-tight">{zone.name}</p>
             <p className="mt-1 text-sm text-muted">{zone.landmark}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <CrowdBadge level={state.zoneActivity[zone.id] ?? "quiet"} />
-              <span className="text-xs font-semibold text-muted">{peopleHere(here)}</span>
-            </div>
+            <p className="mt-2 text-xs font-semibold text-muted">{peopleHere(here)}</p>
           </div>
         </div>
         {action && <div className="mt-4">{action}</div>}
@@ -57,14 +54,10 @@ export function ZonePicker({ fromOnboarding }: { fromOnboarding?: boolean }) {
         <div className="mt-4">
           <FloorPlan
             zones={state.zones}
-            activity={state.zoneActivity}
             selectedId={picked}
             myZoneId={me.zoneId}
             onSelect={setPicked}
           />
-        </div>
-        <div className="mt-2">
-          <CrowdLegend />
         </div>
 
         {pickedZone && (
@@ -97,10 +90,7 @@ export function ZonePicker({ fromOnboarding }: { fromOnboarding?: boolean }) {
                 <ZoneMark code={z.code} size={44} />
                 <span className="mt-3 text-base font-extrabold leading-tight">{z.name}</span>
                 <span className="mt-1 text-xs leading-snug text-muted">{z.landmark}</span>
-                <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
-                  <CrowdBadge level={state.zoneActivity[z.id] ?? "quiet"} />
-                </span>
-                <span className="mt-1 text-xs font-semibold text-muted">{peopleHere(hereCount(z.id))}</span>
+                <span className="mt-auto pt-2 text-xs font-semibold text-muted">{peopleHere(hereCount(z.id))}</span>
               </button>
             );
           })}

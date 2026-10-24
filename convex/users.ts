@@ -1,7 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { OUTFIT_WORD_LIMIT } from "../src/lib/mockData";
-import { STALE_AFTER_MIN } from "../src/lib/time";
 import { scheduleLeaving } from "./leaving";
 import { proposeFor } from "./huddles";
 import { newConnectCode } from "./connections";
@@ -77,7 +76,7 @@ export const update = mutation({
       if (!zone || zone.eventId !== user.eventId) throw new ConvexError("Zone not found.");
     }
     await ctx.db.patch("users", id, {
-      ...(zoneId !== undefined && { zoneId, locationCheckAt: undefined }),
+      ...(zoneId !== undefined && { zoneId }),
       ...(outfit !== undefined && { outfit: cleanOutfit(outfit) }),
       // visible and shareWith always move together.
       ...(shareWith !== undefined && { shareWith, visible: shareWith === "everyone" }),
@@ -121,37 +120,6 @@ export const setStatus = mutation({
     } else {
       await ctx.db.patch("users", id, { status, leavingAt: undefined, updatedAt: now });
     }
-    return null;
-  },
-});
-
-const ASK_AGAIN_AFTER_MIN = 5;
-
-// "Still here?": anyone can ask someone whose zone hasn't been updated for
-// 15 minutes to confirm it. Being in a zone that long is implied, since
-// changing zones updates updatedAt.
-export const askStillHere = mutation({
-  args: { targetId: v.id("users") },
-  returns: v.null(),
-  handler: async (ctx, { targetId }) => {
-    const target = await ctx.db.get("users", targetId);
-    if (!target || !target.visible || !target.zoneId) throw new ConvexError("They're not sharing a zone right now.");
-    const now = Date.now();
-    if (now - target.updatedAt < STALE_AFTER_MIN * MIN) throw new ConvexError("Their location was updated recently.");
-    if (target.locationCheckAt && now - target.locationCheckAt < ASK_AGAIN_AFTER_MIN * MIN) return null;
-    await ctx.db.patch("users", targetId, { locationCheckAt: now });
-    return null;
-  },
-});
-
-// Answer to "Still here?" with "Yes". "I moved" goes through update with a new zone.
-export const confirmZone = mutation({
-  args: { id: v.id("users") },
-  returns: v.null(),
-  handler: async (ctx, { id }) => {
-    const user = await ctx.db.get("users", id);
-    if (!user) throw new ConvexError("User not found.");
-    await ctx.db.patch("users", id, { locationCheckAt: undefined, updatedAt: Date.now() });
     return null;
   },
 });

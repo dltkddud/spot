@@ -3,7 +3,7 @@
 import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { queueFor, useApp, type Screen } from "@/lib/store";
 import { isStale, minutesAgo, minutesUntil } from "@/lib/time";
-import type { CrowdLevel, Status, User, Zone } from "@/lib/types";
+import type { Status, User, Zone } from "@/lib/types";
 import { PIN_PATH, ZoneMark } from "./ZoneIcon";
 
 const iconPaths = {
@@ -24,7 +24,6 @@ const iconPaths = {
     </>
   ),
   refresh: <path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" />,
-  hand: <path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5V4a1.5 1.5 0 0 1 3 0v7m0-5.5a1.5 1.5 0 0 1 3 0V12m0-3.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.6-2.2L4.2 15a1.6 1.6 0 0 1 2.5-2L8 14.5" />,
   clock: (
     <>
       <circle cx="12" cy="12" r="8" />
@@ -88,22 +87,6 @@ export function Logo({ size = "sm" }: { size?: "sm" | "lg" }) {
     <span className="inline-flex items-center gap-1.5">
       <PinMark size={size === "lg" ? 40 : 28} />
       <span className={`font-black tracking-tight ${size === "lg" ? "text-3xl" : "text-lg"}`}>Spot</span>
-    </span>
-  );
-}
-
-const crowdStyles: Record<CrowdLevel, { label: string; cls: string; dot: string }> = {
-  busy: { label: "Busy", cls: "bg-crowd-soft text-crowd-ink", dot: "bg-crowd" },
-  some: { label: "Some people", cls: "bg-primary-soft text-primary-ink", dot: "bg-primary" },
-  quiet: { label: "Quiet", cls: "bg-quiet-soft text-muted", dot: "bg-quiet" },
-};
-
-export function CrowdBadge({ level }: { level: CrowdLevel }) {
-  const s = crowdStyles[level];
-  return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${s.cls}`}>
-      <span className={`h-2 w-2 rounded-full ${s.dot}`} aria-hidden />
-      {s.label}
     </span>
   );
 }
@@ -424,51 +407,5 @@ export function Toasts() {
         </div>
       ))}
     </div>
-  );
-}
-
-// Shown to me when someone asked whether I'm still in my zone.
-export function StillHerePrompt() {
-  const { state, me, dispatch, navigate } = useApp();
-  if (!me?.locationCheckAt || !me.zoneId) return null;
-  const zone = state.zones.find((z) => z.id === me.zoneId);
-  return (
-    <section className="mx-5 mt-4 rounded-2xl border border-primary/30 bg-primary-soft p-4">
-      <p className="flex items-center gap-2 font-extrabold text-primary-ink">
-        <Icon name="pin" />
-        Are you still at {zone?.name ?? "your zone"}?
-      </p>
-      <p className="mt-1 text-sm text-muted">
-        Someone is looking for you. Your last update was {minutesAgo(me.updatedAt, state.now)}.
-      </p>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <Button icon="check" className="px-3 text-sm" onClick={() => dispatch({ type: "confirmZone" })}>
-          Yes, I&apos;m still here
-        </Button>
-        <Button variant="secondary" icon="pin" className="px-3 text-sm" onClick={() => navigate({ name: "zonePicker" })}>
-          I moved
-        </Button>
-      </div>
-    </section>
-  );
-}
-
-// "Still here?" for someone whose zone hasn't been updated in 15+ minutes.
-export function StillHereAsk({ user }: { user: User }) {
-  const { state, me, dispatch } = useApp();
-  if (!user.zoneId || user.id === me?.id || !isStale(user.updatedAt, state.now)) return null;
-  const first = user.name.split(" ")[0];
-  if (user.locationCheckAt && user.locationCheckAt > user.updatedAt) {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
-        <Icon name="clock" size={14} />
-        Asked {first} to confirm
-      </span>
-    );
-  }
-  return (
-    <PillButton icon="hand" onClick={() => dispatch({ type: "askStillHere", userId: user.id })}>
-      Still here?
-    </PillButton>
   );
 }

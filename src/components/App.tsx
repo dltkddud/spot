@@ -13,7 +13,7 @@ import { Welcome } from "./screens/Welcome";
 import { ZonePicker } from "./screens/ZonePicker";
 import { ZoneDetail, Zones } from "./screens/Zones";
 import { PhoneFrame, scrollAppToTop } from "./PhoneFrame";
-import { PinMark, StillHerePrompt, TabBar, Toasts } from "./ui";
+import { PinMark, TabBar, Toasts } from "./ui";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -41,7 +41,6 @@ function Router() {
   const withTabs = (node: ReactNode, home = false) => (
     <>
       {home && <HomeHeader />}
-      <StillHerePrompt />
       {node}
       <TabBar />
     </>

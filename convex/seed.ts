@@ -48,6 +48,30 @@ async function insertDemoRequests(
   }
 }
 
+// Runs a data migration the first time seed.ensure sees it, in Development and
+// Production alike, and records it in the migrations table so it never runs again.
+async function runOnce(ctx: MutationCtx, name: string, migrate: () => Promise<void>) {
+  const done = await ctx.db
+    .query("migrations")
+    .withIndex("by_name", (q) => q.eq("name", name))
+    .unique();
+  if (done) return;
+  await migrate();
+  await ctx.db.insert("migrations", { name, ranAt: Date.now() });
+}
+
+// Clears the fields left behind by "Still here?" and "Stay connected?".
+async function removeStillHereAndStay(ctx: MutationCtx) {
+  for await (const u of ctx.db.query("users")) {
+    if (u.locationCheckAt !== undefined) await ctx.db.patch("users", u._id, { locationCheckAt: undefined });
+  }
+  for await (const m of ctx.db.query("huddleMembers")) {
+    if (m.stayAnswered !== undefined || m.stayYes !== undefined) {
+      await ctx.db.patch("huddleMembers", m._id, { stayAnswered: undefined, stayYes: undefined });
+    }
+  }
+}
+
 // Suggests huddles in the demo speakers' lines. In each one, everyone but the
 // person who has waited longest has already said yes, so viewing as that
 // person (e.g. Lena in Dana's line) shows a suggestion one tap from ready.
@@ -147,6 +171,7 @@ export const ensure = mutation({
   args: {},
   returns: v.id("events"),
   handler: async (ctx) => {
+    await runOnce(ctx, "remove-still-here-and-stay", () => removeStillHereAndStay(ctx));
     const existing = await ctx.db.query("events").first();
     if (existing) {
       // Older deployments were seeded with "3 hours from now". Pin them to the real end.

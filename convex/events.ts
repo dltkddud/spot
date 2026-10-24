@@ -26,30 +26,6 @@ export const current = query({
   },
 });
 
-const crowdLevel = v.union(v.literal("quiet"), v.literal("some"), v.literal("busy"));
-
-// How busy each zone is, counting everyone who set a zone, hidden people
-// included. Only a level is returned, never a count, and fewer than 3 people
-// is always "quiet" so one hidden person can't be spotted.
-export const zoneActivity = query({
-  args: { eventId: v.id("events") },
-  returns: v.array(v.object({ zoneId: v.id("zones"), level: crowdLevel })),
-  handler: async (ctx, { eventId }) => {
-    const counts = new Map<Id<"zones">, number>();
-    const users = await ctx.db
-      .query("users")
-      .withIndex("by_event", (q) => q.eq("eventId", eventId))
-      .take(2000);
-    for (const u of users) {
-      if (u.zoneId) counts.set(u.zoneId, (counts.get(u.zoneId) ?? 0) + 1);
-    }
-    return [...counts].map(([zoneId, n]) => ({
-      zoneId,
-      level: n >= 6 ? ("busy" as const) : n >= 3 ? ("some" as const) : ("quiet" as const),
-    }));
-  },
-});
-
 // Schedules the end-of-event cleanup for the event's current endsAt, once.
 export async function scheduleEventEnd(ctx: MutationCtx, eventId: Id<"events">) {
   const event = await ctx.db.get("events", eventId);
@@ -70,7 +46,6 @@ export const endEvent = internalMutation({
     for await (const u of ctx.db.query("users").withIndex("by_event", (q) => q.eq("eventId", eventId))) {
       await ctx.db.patch("users", u._id, {
         zoneId: undefined,
-        locationCheckAt: undefined,
         status: "available",
         leavingAt: undefined,
         updatedAt: now,
