@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { OUTFIT_WORD_LIMIT } from "@/lib/mockData";
 import { useApp } from "@/lib/store";
-import { clockTime } from "@/lib/time";
+import { dayTime } from "@/lib/time";
 import { Avatar, Button, Header, inputClass, SectionTitle, StatusPill, ZoneBadge } from "../ui";
 
 function wordCount(s: string) {
@@ -104,7 +104,7 @@ export function Me() {
           </span>
         </label>
         <p className="mt-3 text-sm text-muted">
-          Your zone and status are deleted at {clockTime(state.event.endsAt)} when {state.event.name} ends. Your
+          Your zone and status are deleted when {state.event.name} ends, {dayTime(state.event.endsAt)}. Your
           basic profile stays so you can use it at the next event.
         </p>
 

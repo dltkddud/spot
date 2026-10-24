@@ -20,6 +20,19 @@ export function isStale(updatedAt: number, now: number): boolean {
   return now - updatedAt > STALE_AFTER_MIN * MIN;
 }
 
+// Always English and venue time (Pacific), whatever the browser is set to.
+const VENUE_TIME_ZONE = "America/Los_Angeles";
+
 export function clockTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return new Date(ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: VENUE_TIME_ZONE });
+}
+
+// e.g. "Sun 4:00 PM"
+export function dayTime(ts: number): string {
+  return new Date(ts).toLocaleString("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: VENUE_TIME_ZONE,
+  });
 }

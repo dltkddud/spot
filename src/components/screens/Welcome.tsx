@@ -1,7 +1,7 @@
 "use client";
 
 import { useApp } from "@/lib/store";
-import { clockTime } from "@/lib/time";
+import { dayTime } from "@/lib/time";
 import { Button } from "../ui";
 
 export function Welcome() {
@@ -45,7 +45,7 @@ export function Welcome() {
         <p className="mt-4 text-center text-xs leading-relaxed text-muted">
           Only your zone is shared, never your exact location.
           <br />
-          Zones and statuses are deleted at {clockTime(state.event.endsAt)} when the event ends.
+          Zones and statuses are deleted when the event ends, {dayTime(state.event.endsAt)}.
         </p>
       </div>
     </main>

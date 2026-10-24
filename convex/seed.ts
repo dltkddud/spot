@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { makeEvent, makeRequests, makeUsers, ZONES } from "../src/lib/mockData";
+import { EVENT_ENDS_AT, makeEvent, makeRequests, makeUsers, ZONES } from "../src/lib/mockData";
 import { scheduleEventEnd } from "./events";
 import { scheduleLeaving } from "./leaving";
 
@@ -65,6 +65,8 @@ export const ensure = mutation({
   handler: async (ctx) => {
     const existing = await ctx.db.query("events").first();
     if (existing) {
+      // Older deployments were seeded with "3 hours from now". Pin them to the real end.
+      if (existing.endsAt !== EVENT_ENDS_AT) await ctx.db.patch("events", existing._id, { endsAt: EVENT_ENDS_AT });
       const zone = await ctx.db
         .query("zones")
         .withIndex("by_event", (q) => q.eq("eventId", existing._id))
@@ -75,7 +77,7 @@ export const ensure = mutation({
     }
 
     const now = Date.now();
-    const { name, venue, endsAt } = makeEvent(now);
+    const { name, venue, endsAt } = makeEvent();
     const eventId = await ctx.db.insert("events", { name, venue, endsAt });
     const zoneIds = await insertZones(ctx, eventId);
     await insertDemoPeople(ctx, eventId, zoneIds, now);
@@ -85,16 +87,12 @@ export const ensure = mutation({
 });
 
 // "Reset demo": puts the demo people and their requests back where mockData
-// starts them, and moves the event end 3 hours out again. Real sign-ups, and
-// requests between real sign-ups, are left alone.
+// starts them. Real sign-ups, and requests between real sign-ups, are left alone.
 export const resetDemo = mutation({
   args: { eventId: v.id("events") },
   returns: v.null(),
   handler: async (ctx, { eventId }) => {
     const now = Date.now();
-    await ctx.db.patch("events", eventId, { endsAt: makeEvent(now).endsAt });
-    await scheduleEventEnd(ctx, eventId);
-
     const zones = await ctx.db
       .query("zones")
       .withIndex("by_event", (q) => q.eq("eventId", eventId))

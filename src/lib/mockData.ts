@@ -29,14 +29,15 @@ export const ZONES: Zone[] = [
   { id: "z-lounge", code: "G", name: "Entrance Lounge", landmark: "Beanbags near the front doors" },
 ];
 
-export function makeEvent(now: number): EventInfo {
-  const end = new Date(now);
-  end.setHours(end.getHours() + 3, 0, 0, 0);
+// Sun Oct 25, 2026, 4:00 PM in San Francisco (PDT, UTC-7).
+export const EVENT_ENDS_AT = Date.UTC(2026, 9, 25, 23, 0, 0);
+
+export function makeEvent(): EventInfo {
   return {
     id: "evt-1",
     name: "Cal Hacks 13.0",
     venue: "Palace of Fine Arts",
-    endsAt: end.getTime(),
+    endsAt: EVENT_ENDS_AT,
   };
 }
 

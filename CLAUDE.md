@@ -1,3 +1,8 @@
+# Spot
+
+팀 인수인계 문서를 먼저 읽어: @HANDOFF.md
+단계를 끝낼 때마다 HANDOFF.md의 "5. 진행 상황"과 "11. 진행 로그"를 업데이트해.
+
 <!-- convex-ai-start -->
 
 This project uses [Convex](https://convex.dev) as its backend.
