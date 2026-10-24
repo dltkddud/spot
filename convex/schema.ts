@@ -104,6 +104,17 @@ export default defineSchema({
     // among its members, which is where the whole huddle stands in line.
     huddleId: v.optional(v.id("huddles")),
     lineAt: v.optional(v.number()),
+    // Missed because the speaker left (or stopped being a speaker), not a no-show.
+    closedBecause: v.optional(v.literal("speaker_left")),
+    // The follow-up message drafted for the guest after that: by Claude, or the
+    // fallback template when Claude isn't available.
+    followUp: v.optional(
+      v.object({
+        text: v.string(),
+        source: v.union(v.literal("claude"), v.literal("template")),
+        createdAt: v.number(),
+      }),
+    ),
   })
     .index("by_panel_status", ["panelId", "status"])
     .index("by_attendee", ["attendeeId"])

@@ -132,6 +132,7 @@ type Action =
   | { type: "viewAs"; userId: string }
   | { type: "simulateAccept" }
   | { type: "simulateLeaving" }
+  | { type: "simulateLeaveNow" }
   | { type: "reset"; now: number };
 
 type LocalAction =
@@ -300,6 +301,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const demoFriends = useMutation(api.connections.demoFriends);
   const createRequest = useMutation(api.chatRequests.create);
   const setRequestStatus = useMutation(api.chatRequests.setStatus);
+  const demoLeaveNow = useMutation(api.leaving.demoLeaveNow);
 
   useEffect(() => {
     ensureSeed().catch((e) => console.error("Seeding failed", e));
@@ -433,6 +435,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         leaveWarnedFor: r.leaveWarnedFor,
         huddleId: r.huddleId,
         lineAt: r.lineAt,
+        closedBecause: r.closedBecause,
+        followUp: r.followUp && { text: r.followUp.text, source: r.followUp.source },
       });
     }
     return [...byId.values()];
@@ -487,8 +491,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (r.status === "accepted") {
           const zone = zones.find((z) => z.id === panel.zoneId);
           localDispatch({ type: "toast", message: `${panel.name} is ready for you at ${zone?.name ?? "their zone"}.` });
-        } else if (r.status === "missed" && !panel.visible) {
-          localDispatch({ type: "toast", message: `${panel.name} has left. Your request moved to missed.` });
+        } else if (r.status === "missed" && r.closedBecause === "speaker_left") {
+          const first = panel.name.split(" ")[0];
+          localDispatch({
+            type: "toast",
+            message: panel.linkedinUrl
+              ? `${first} has left. Keep the conversation going on LinkedIn.`
+              : `${first} has left. Keep the conversation going with a quick message.`,
+          });
         }
       }
 
@@ -777,6 +787,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        case "simulateLeaveNow":
+          if (meId) run(demoLeaveNow({ attendeeId: meId }));
+          return;
+
         case "reset": {
           if (!event) return;
           const mine = participations.find((p) => p.eventId === event.id);
@@ -807,6 +821,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       demoFriends,
       createRequest,
       setRequestStatus,
+      demoLeaveNow,
       resetDemo,
     ],
   );

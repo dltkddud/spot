@@ -12,6 +12,8 @@ import type * as activity from "../activity.js";
 import type * as chatRequests from "../chatRequests.js";
 import type * as connections from "../connections.js";
 import type * as events from "../events.js";
+import type * as followUps from "../followUps.js";
+import type * as followUpsNode from "../followUpsNode.js";
 import type * as huddles from "../huddles.js";
 import type * as leaving from "../leaving.js";
 import type * as profiles from "../profiles.js";
@@ -29,6 +31,8 @@ declare const fullApi: ApiFromModules<{
   chatRequests: typeof chatRequests;
   connections: typeof connections;
   events: typeof events;
+  followUps: typeof followUps;
+  followUpsNode: typeof followUpsNode;
   huddles: typeof huddles;
   leaving: typeof leaving;
   profiles: typeof profiles;

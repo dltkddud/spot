@@ -90,6 +90,9 @@ export type ChatRequest = {
   // Set while part of a formed huddle; lineAt is where the whole huddle stands in line.
   huddleId?: string;
   lineAt?: number;
+  // Missed because the speaker left, and the message drafted for me to send them.
+  closedBecause?: "speaker_left";
+  followUp?: { text: string; source: "claude" | "template" };
 };
 
 export type HuddleMember = {

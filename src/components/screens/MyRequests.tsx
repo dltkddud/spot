@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { positionInQueue, useApp } from "@/lib/store";
+import { FollowUp } from "../FollowUp";
 import { HuddleCard, huddleForRequest } from "../Huddle";
 import { minutesAgo } from "@/lib/time";
 import type { ChatRequest } from "@/lib/types";
@@ -70,7 +71,7 @@ export function MyRequests() {
         {mine.length === 0 && (
           <div className="mt-8 rounded-2xl border border-dashed border-line p-6 text-center">
             <p className="font-extrabold">No requests yet</p>
-            <p className="mt-1 text-sm text-muted">Open someone from Discover and tap Request to chat.</p>
+            <p className="mt-1 text-sm text-muted">Open someone in Explore and tap Request to chat.</p>
             <Button className="mt-4" icon="search" onClick={() => dispatch({ type: "resetTo", screen: { name: "explore" } })}>
               Go to Explore
             </Button>
@@ -133,16 +134,7 @@ export function MyRequests() {
                 return (
                   <Row key={r.id} r={r}>
                     <p className="mt-3 text-sm font-semibold text-muted">{pastLabel[r.status]}</p>
-                    {r.status === "missed" && p?.contactUrl && (
-                      <a
-                        href={p.contactUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-block text-sm font-bold underline underline-offset-4"
-                      >
-                        Open {p.name.split(" ")[0]}&apos;s contact link
-                      </a>
-                    )}
+                    {r.status === "missed" && r.closedBecause === "speaker_left" && <FollowUp request={r} speaker={p} />}
                   </Row>
                 );
               })}

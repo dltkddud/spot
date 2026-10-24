@@ -30,6 +30,12 @@ const iconPaths = {
       <path d="M12 8v4l2.5 2.5" />
     </>
   ),  chevron: <path d="M7 10l5 5 5-5" />,
+  linkedin: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <path d="M8 10.5V17M8 7.2v.3M12 17v-6.5M12 13.5c0-1.8 1-3 2.5-3s2.5 1 2.5 3V17" />
+    </>
+  ),
   edit: <path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4" />,
   users: (
     <>

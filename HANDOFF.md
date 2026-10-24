@@ -4,14 +4,14 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-24 07:43 PT
+마지막 업데이트: 2026-10-24 09:59 PT
 
 ---
 
 ## 0. 30초 요약
 
 - **무엇**: 행사장에서 대화하고 싶은 패널(발표자·프로덕트 제작자)을 놓치지 않게 돕는 실시간 네트워킹 웹앱 **Spot**
-- **어디까지**: 화면 전체 완성, 사용자·대화 요청·떠나기 알림·행사 종료 정리까지 Convex로 연결, Vercel 배포 완료 (Stage 0~3). 평면도·파란색 디자인, **Huddle**(같은 줄의 관심사 겹치는 사람끼리 함께 만나기), **Connections**(미리 연결한 사람과 구역 자동 공유), **여러 행사·행사별 역할·프로필 수정** 적용
+- **어디까지**: 화면 전체 완성, 사용자·대화 요청·떠나기 알림·행사 종료 정리까지 Convex로 연결, Vercel 배포 완료 (Stage 0~3). 평면도·파란색 디자인, **Huddle**(같은 줄의 관심사 겹치는 사람끼리 함께 만나기), **Connections**(미리 연결한 사람과 구역 자동 공유), **여러 행사·행사별 역할·프로필 수정**, **패널이 떠난 뒤 LinkedIn + Claude 후속 메시지** 적용
 - **데모 주소**: https://spot-psi-two.vercel.app
 - 행사 종료 시각은 일 10/25 16:00 PT로 고정됨 (`EVENT_ENDS_AT`, 8-1 완료)
 - **그다음**: Stage 4 AI 추천 (Claude API 키 필요)
@@ -62,6 +62,7 @@ Anthropic 트랙은 Devpost 목록에 아직 없어서 Slack Anthropic 채널에
 8. AI 추천: 관심사·상대 소개·상태·구역으로 지금 만나면 좋을 패널 3명과 이유 (Stage 4)
 9. **Huddle**: "줄을 서는 앱이 아니라 더 많은 연결을 만드는 앱". 같은 패널을 기다리는 참석자 중 관심사가 겹치는 사람(최대 3명)에게 함께 만나자고 제안. 모두 수락하면 가장 앞선 멤버의 순서로 합쳐지고, 패널은 묶음 카드 하나로 수락·만남 처리
 10. **Connections**: 에어태그처럼 미리 연결해 둔 사람에게 내가 고른 구역을 자동 공유 (GPS 없음). 6자리 코드·초대 링크(`?connect=코드`)로 연결, 위치 공개 범위 Everyone / Only my connections / No one
+11. **떠난 뒤 이어가기**: 패널이 떠나서(또는 Speaker→Guest로 바꿔서) 요청이 missed가 된 게스트에게 "Dana has left. Keep the conversation going on LinkedIn." 배너, Requests 카드에 패널 LinkedIn 버튼·Claude(`claude-haiku-5-5`)가 쓴 3~4문장 영어 메시지 초안·Copy·기타 링크
 
 **원칙**: 동의한 사용자만 표시, 구역 단위로만, 자동 위치 추적·얼굴 인식 없음, 언제든 숨기기, 행사 종료 후 삭제
 
@@ -130,7 +131,10 @@ convex/
   huddles.ts        proposeFor(매칭), afterRequestChange, dissolveAllFor, respond, setGroupStatus, demoPropose, forAttendee, forPanel
   connections.ts    프로필끼리 connect·disconnect, connectByCode, remove, demoFriends, mine
   activity.ts       record (서버 기록), summary (행사 전체 숫자)
-  leaving.ts        scheduleLeaving, warn(10분 전), leave(떠나는 시각), closeLine(줄 닫기: 떠날 때·Speaker→Guest)
+  followUps.ts      context(초안에 쓸 정보), save, templateMessage(Claude 실패 시 기본 문장)
+  followUpsNode.ts  "use node" action draft: claude-haiku-5-5로 후속 메시지 초안 (키 없거나 실패면 기본 문장)
+  leaving.ts        scheduleLeaving, warn(10분 전), leave(떠나는 시각), closeLine(줄 닫기: 떠날 때·Speaker→Guest,
+                    missed + closedBecause 표시 + 초안 예약), demoLeaveNow(데모 버튼)
   seed.ts           ensure(마이그레이션 + 행사 채우기·맞추기), resetDemo(지금 행사의 데모 초기화)
   _generated/       자동 생성. 직접 고치지 않음. GitHub에 같이 올림
 prompts/
@@ -144,6 +148,7 @@ src/
     Huddle.tsx      참석자용 Huddle 카드(제안·대기·완성), 패널용 묶음 카드
     ZoneIcon.tsx    구역 아이콘 7개(24 격자, 선 두께 2)와 ZoneMark(핀 안 아이콘 + 코드 배지). 구역이 나오는 모든 곳에서 사용
     PhoneFrame.tsx  노트북용 휴대폰 프레임(상태바, 축소 맞춤), scrollAppToTop
+    FollowUp.tsx    떠난 패널의 LinkedIn 버튼, 메시지 초안(고쳐 쓰기 가능), Copy(실패 시 텍스트 선택), 기타 링크
     Connections.tsx Your people 줄, 위치 공개 범위 선택, Connect with friends(코드·링크 복사·코드 입력·연결 목록)
     screens/        Welcome, Onboarding(ProfileSetup·JoinEvent와 공통 입력칸), Events, EditProfile,
                     ZonePicker, Explore(People/Map 전환),
@@ -185,6 +190,8 @@ src/
 | `huddles.setGroupStatus` | mutation | 패널이 Huddle 전체를 한 번에 수락/거절/만남/놓침 |
 | `huddles.demoPropose` | mutation | 데모 버튼. 내 줄에 관심사가 겹치는 예시 참석자를 넣고 제안 |
 | `huddles.forAttendee` / `forPanel` | query | 내 Huddle(제안·완성·연결 질문 대기) / 패널 줄의 완성된 Huddle |
+| `followUpsNode.draft` | internal action | missed(패널이 떠남)된 요청마다 Claude로 후속 메시지 초안을 만들어 `chatRequests.followUp`에 저장. 화면은 실시간으로 표시 |
+| `leaving.demoLeaveNow` | mutation | 데모 버튼 "A speaker I'm waiting for leaves now". 내가 기다리는 패널이 바로 떠남 |
 | `activity.summary` | query | 행사 전체 활동 숫자 (Me 화면 Huddles formed, Connections made) |
 | `events.endEvent` | internal | 종료 시각에 모두의 구역·상태·떠나는 시간 삭제 |
 | `seed.ensure` / `seed.resetDemo` | mutation | 마이그레이션 실행 + EVENTS 행사 채우기·맞추기 / 지금 행사의 데모 초기화(실제 가입자는 건드리지 않음) |
@@ -231,6 +238,7 @@ src/
 - [x] Huddle: 같은 줄 관심사 매칭, 함께 수락·만남, Open to huddles, 데모 버튼
 - [x] 팀 피드백 1: 구역 혼잡도, Huddle 후 "Stay connected?", Still here? 제거
 - [x] 팀 피드백 2: 하단 탭 정리(Explore 통합), 패널도 다른 패널에게 요청
+- [x] 팀 피드백 4: 패널이 떠난 뒤 LinkedIn 버튼 + Claude 후속 메시지 초안 + Copy, 프로필 LinkedIn 칸 안내, Now 화면 안내, 데모 버튼
 - [x] 팀 피드백 3: 여러 행사(예시 2개 추가), 행사별 역할(Speaker/Guest), 프로필(profiles) 분리, Edit profile, LinkedIn 칸
 - [x] Connections: 연결 코드·초대 링크, 위치 공개 범위(Everyone / Only my connections / No one), Your people, Zones 표시, 데모 버튼
 - [x] 구역 아이콘 통일: Pavilion 텐트, Atrium 기둥 홀, Breakouts 1–4 문 2개, Broadway 복도·화살표, Broadway 3 출입문, Breakouts 5–7 문 3개, Theater 무대·커튼
@@ -384,6 +392,9 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - **Production과 Development는 데이터가 따로**다. 데모 주소에서 보이는 사람과 노트북에서 보이는 사람이 다른 게 정상.
 - **예시 사람은 Huddle에서 자동으로 Yes**: 실제 사용자가 낀 Huddle 제안에서 예시 사람은 버튼을 누를 수 없어 자동으로 Yes 처리된다. seed/Reset demo 직후에는 Dana의 줄에 Lena·Aisha(둘 다 Frontend) 제안이 있고 Aisha만 Yes 상태라, View as Lena로 바로 "Huddle up"을 보여줄 수 있다. Frontend 관심사로 가입해 Dana에게 요청하면 이 제안에 3번째로 합류한다.
 - **Leo는 "Only my connections" 공개**: 기본으로는 지도에 안 보이고, "Connect me with demo friends"를 누르면 Your people과 Theater에 나타난다 (연결 공개 시연용).
+- **Claude 키**: `ANTHROPIC_API_KEY`는 Development와 Production Convex 환경 변수에 모두 들어가 있다(코드·파일에는 없음). 키가 없거나 호출이 실패하면 후속 메시지는 기본 문장(`templateMessage`)으로 나오고, 카드에 "Drafted by Claude" 대신 "Edit it before you send."만 보인다.
+- **후속 메시지는 패널이 떠났을 때만**: "Didn't show"로 놓친 경우(게스트가 안 온 경우)에는 만들지 않는다. 구분은 `chatRequests.closedBecause === "speaker_left"`.
+- **예시 LinkedIn 주소**는 `linkedin.com/in/spot-demo-…` 형식이라 실제 페이지가 아니다. 데모에서 버튼을 누르면 LinkedIn의 "페이지 없음"이 뜨는 게 정상.
 - **예시 행사 2개**(Founders & Coffee SF, Bay Area Robotics Expo)는 앱을 처음 열 때 자동으로 생긴다. Reset demo는 **지금 보고 있는 행사**만 초기화한다.
 - **View as**: 지금 행사의 예시 Speaker·Guest 한 명씩(Cal Hacks는 Dana·Lena). Edit profile은 "You"로 볼 때만 나온다.
 - **새 예시 참석자 6명**(Maya, Omar, Jin, Sara, Leo, Nina)은 기존 DB에는 자동으로 안 들어간다. Production에서 Me → Demo controls → **Reset demo**를 한 번 눌러야 추가된다. Jin·Sara·Nina는 위치 숨김 상태다.
@@ -435,3 +446,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/24 07:16 팀 피드백 1: 혼잡도·Stay connected·Still here 제거, 한 번만 도는 마이그레이션 장치(runOnce) 추가
 - 10/24 07:21 팀 피드백 2: 탭 정리(게스트 Explore/Requests/Me, 패널 Now 추가), Explore에 People/Map 전환, Huddle은 Requests로, 패널끼리 요청 가능
 - 10/24 07:43 팀 피드백 3: profiles 분리·여러 행사·행사별 역할·Edit profile·LinkedIn, 마이그레이션 profiles-and-events-v1, 예시 행사 2개
+- 10/24 09:59 팀 피드백 4: 떠난 패널의 LinkedIn + Claude(haiku 5.5) 후속 메시지 초안·Copy, Speaker→Guest 때도 같은 흐름, 데모 "leaves now" 버튼

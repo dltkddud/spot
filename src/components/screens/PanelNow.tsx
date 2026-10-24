@@ -5,11 +5,11 @@ import { queueFor, useApp } from "@/lib/store";
 import { clockTime, minutesAgo, minutesUntil } from "@/lib/time";
 import type { ChatRequest, Huddle } from "@/lib/types";
 import { PanelHuddleCard } from "../Huddle";
-import { Avatar, Button, SectionTitle } from "../ui";
+import { Avatar, Button, Icon, SectionTitle } from "../ui";
 import { MyBar } from "./Discover";
 
 export function PanelNow() {
-  const { state, me, dispatch } = useApp();
+  const { state, me, dispatch, navigate } = useApp();
   if (!me) return null;
 
   const queue = queueFor(state.requests, me.id);
@@ -86,6 +86,23 @@ export function PanelNow() {
               : "No one is waiting right now."}
           </p>
         )}
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-muted">
+          <Icon name="linkedin" size={14} />
+          <span>
+            After you leave, people in your line get your LinkedIn.
+            {!me.linkedinUrl && (
+              <>
+                {" "}
+                <button
+                  onClick={() => navigate({ name: "editProfile" })}
+                  className="font-bold text-primary-ink underline underline-offset-2"
+                >
+                  Add yours
+                </button>
+              </>
+            )}
+          </span>
+        </p>
       </div>
 
       <div className="mt-4">

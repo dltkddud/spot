@@ -175,6 +175,9 @@ export function Me() {
               <Button variant="secondary" onClick={() => dispatch({ type: "simulateLeaving" })}>
                 A speaker I&apos;m waiting for leaves in 10 min
               </Button>
+              <Button variant="secondary" onClick={() => dispatch({ type: "simulateLeaveNow" })}>
+                A speaker I&apos;m waiting for leaves now
+              </Button>
             </div>
           )}
           <Button variant="ghost" icon="refresh" block onClick={() => dispatch({ type: "reset", now: Date.now() })}>
