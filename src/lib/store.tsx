@@ -16,7 +16,6 @@ import {
 } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { makeRequests } from "./mockData";
 import { LEAVE_WARNING_MIN } from "./time";
 import type {
   Activity,
@@ -56,10 +55,9 @@ export type ProfileInput = {
   visible: boolean;
 };
 
-// Kept in the browser. Event, zones and users come from Convex.
+// Kept in the browser. Event, zones, users and chat requests come from Convex.
 type LocalState = {
   now: number;
-  requests: ChatRequest[];
   activity: Activity[];
   toasts: Toast[];
   warned: string[];
@@ -73,6 +71,7 @@ type State = LocalState & {
   event: EventInfo;
   zones: Zone[];
   users: User[];
+  requests: ChatRequest[];
 };
 
 type Action =
@@ -96,13 +95,13 @@ type Action =
 type LocalAction =
   | Extract<
       Action,
-      { type: "navigate" | "back" | "resetTo" | "requestChat" | "setRequestStatus" | "log" | "toast" | "dismissToast" }
+      { type: "navigate" | "back" | "resetTo" | "log" | "toast" | "dismissToast" }
     >
-  | { type: "tick"; now: number; users: User[] }
-  | { type: "boot"; myUserId: string | null; role?: Role; requests: ChatRequest[] }
+  | { type: "tick"; now: number; users: User[]; requests: ChatRequest[] }
+  | { type: "boot"; myUserId: string | null; role?: Role }
   | { type: "signedIn"; userId: string }
   | { type: "viewAs"; userId: string; role: Role }
-  | { type: "reset"; now: number; requests: ChatRequest[]; role?: Role };
+  | { type: "reset"; now: number; role?: Role };
 
 let idCounter = 0;
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(idCounter++).toString(36)}`;
@@ -127,7 +126,6 @@ function saveMyId(id: string | null) {
 function initialState(now: number, myUserId: string | null): LocalState {
   return {
     now,
-    requests: [],
     activity: [],
     toasts: [],
     warned: [],
@@ -138,15 +136,6 @@ function initialState(now: number, myUserId: string | null): LocalState {
   };
 }
 
-// Stage 1: chat requests are still fake. The mockData requests point at the
-// demo people by their seed key, so swap in their Convex ids.
-function demoRequests(users: User[], now: number): ChatRequest[] {
-  const idFor = new Map(users.filter((u) => u.seedKey).map((u) => [u.seedKey!, u.id]));
-  return makeRequests(now)
-    .filter((r) => idFor.has(r.panelId) && idFor.has(r.attendeeId))
-    .map((r) => ({ ...r, panelId: idFor.get(r.panelId)!, attendeeId: idFor.get(r.attendeeId)! }));
-}
-
 function homeFor(role: Role): Screen {
   return role === "panel" ? { name: "panelNow" } : { name: "discover" };
 }
@@ -155,39 +144,27 @@ function addToast(state: LocalState, message: string): LocalState {
   return { ...state, toasts: [...state.toasts, { id: newId("t"), message }].slice(-3) };
 }
 
-function runScheduled(state: LocalState, users: User[]): LocalState {
+// Stage 2: only the 10-minute heads-up is still checked in the browser.
+// Stage 3 moves leaving to the server scheduler.
+function runScheduled(state: LocalState, users: User[], requests: ChatRequest[]): LocalState {
   let next = state;
   const now = state.now;
 
   for (const p of users) {
-    if (p.role !== "panel" || p.status !== "leaving" || !p.leavingAt) continue;
+    if (p.role !== "panel" || p.status !== "leaving" || !p.leavingAt || !p.visible) continue;
+    if (p.leavingAt <= now || p.leavingAt - now > LEAVE_WARNING_MIN * MIN) continue;
 
-    if (p.leavingAt <= now && p.visible) {
-      const missedIds = next.requests
-        .filter((r) => r.panelId === p.id && (r.status === "waiting" || r.status === "accepted"))
-        .map((r) => r.id);
-      next = {
-        ...next,
-        requests: next.requests.map((r) => (missedIds.includes(r.id) ? { ...r, status: "missed" } : r)),
-      };
-      const mine = next.requests.find((r) => missedIds.includes(r.id) && r.attendeeId === next.currentUserId);
-      if (mine) next = addToast(next, `${p.name} has left. Your request moved to missed.`);
-      continue;
-    }
-
-    if (p.leavingAt - now <= LEAVE_WARNING_MIN * MIN) {
-      const mine = next.requests.find(
-        (r) =>
-          r.panelId === p.id &&
-          r.attendeeId === next.currentUserId &&
-          (r.status === "waiting" || r.status === "accepted") &&
-          !next.warned.includes(`${r.id}:${p.leavingAt}`),
-      );
-      if (mine) {
-        const mins = Math.max(1, Math.ceil((p.leavingAt - now) / MIN));
-        next = addToast(next, `${p.name} leaves in ${mins} min. Head over now if you can.`);
-        next = { ...next, warned: [...next.warned, `${mine.id}:${p.leavingAt}`] };
-      }
+    const mine = requests.find(
+      (r) =>
+        r.panelId === p.id &&
+        r.attendeeId === next.currentUserId &&
+        (r.status === "waiting" || r.status === "accepted") &&
+        !next.warned.includes(`${r.id}:${p.leavingAt}`),
+    );
+    if (mine) {
+      const mins = Math.max(1, Math.ceil((p.leavingAt - now) / MIN));
+      next = addToast(next, `${p.name} leaves in ${mins} min. Head over now if you can.`);
+      next = { ...next, warned: [...next.warned, `${mine.id}:${p.leavingAt}`] };
     }
   }
   return next;
@@ -198,7 +175,7 @@ function reducer(state: LocalState, action: LocalAction): LocalState {
 
   switch (action.type) {
     case "tick":
-      return runScheduled({ ...state, now: action.now }, action.users);
+      return runScheduled({ ...state, now: action.now }, action.users, action.requests);
 
     case "navigate": {
       const stack = action.replace ? [...state.stack.slice(0, -1), action.screen] : [...state.stack, action.screen];
@@ -217,7 +194,6 @@ function reducer(state: LocalState, action: LocalAction): LocalState {
         booted: true,
         myUserId: action.myUserId,
         currentUserId: action.myUserId,
-        requests: action.requests,
         stack: action.role ? [homeFor(action.role)] : state.stack,
       };
 
@@ -228,44 +204,6 @@ function reducer(state: LocalState, action: LocalAction): LocalState {
         myUserId: action.userId,
         stack: [{ name: "zonePicker", fromOnboarding: true }],
       };
-
-    case "requestChat": {
-      if (!meId) return state;
-      const req: ChatRequest = {
-        id: newId("r"),
-        panelId: action.panelId,
-        attendeeId: meId,
-        note: action.note.trim(),
-        status: "waiting",
-        createdAt: state.now,
-      };
-      return {
-        ...state,
-        requests: [...state.requests, req],
-        activity: [
-          ...state.activity,
-          { id: newId("act"), type: "request_chat", userId: meId, targetId: action.panelId, createdAt: state.now },
-        ],
-      };
-    }
-
-    case "setRequestStatus": {
-      const req = state.requests.find((r) => r.id === action.requestId);
-      if (!req) return state;
-      const activityType: ActivityType | null =
-        action.status === "accepted" ? "accept_request" : action.status === "met" ? "mark_met" : null;
-      return {
-        ...state,
-        requests: state.requests.map((r) =>
-          r.id === action.requestId
-            ? { ...r, status: action.status, acceptedAt: action.status === "accepted" ? state.now : r.acceptedAt }
-            : r,
-        ),
-        activity: activityType && meId
-          ? [...state.activity, { id: newId("act"), type: activityType, userId: meId, targetId: req.panelId, createdAt: state.now }]
-          : state.activity,
-      };
-    }
 
     case "log":
       if (!meId) return state;
@@ -291,7 +229,6 @@ function reducer(state: LocalState, action: LocalAction): LocalState {
         ...initialState(action.now, state.myUserId),
         booted: true,
         currentUserId: state.myUserId,
-        requests: action.requests,
         stack: action.role ? [homeFor(action.role)] : [{ name: "welcome" }],
       };
   }
@@ -328,18 +265,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const createUser = useMutation(api.users.create);
   const updateUser = useMutation(api.users.update);
   const setUserStatus = useMutation(api.users.setStatus);
+  const createRequest = useMutation(api.chatRequests.create);
+  const setRequestStatus = useMutation(api.chatRequests.setStatus);
 
   useEffect(() => {
     ensureSeed().catch((e) => console.error("Seeding failed", e));
   }, [ensureSeed]);
 
   const current = useLatest(useQuery(api.events.current));
+  const eventId = current?.event._id;
   const rawUsers = useLatest(
-    useQuery(
-      api.users.listByEvent,
-      current ? { eventId: current.event._id, viewerId: local.myUserId ?? undefined } : "skip",
-    ),
+    useQuery(api.users.listByEvent, eventId ? { eventId, viewerId: local.myUserId ?? undefined } : "skip"),
   );
+
+  const viewerId = local.booted ? (local.currentUserId as Id<"users"> | null) : null;
+  const openLines = useLatest(useQuery(api.chatRequests.activeByEvent, eventId ? { eventId } : "skip"));
+  const myLine = useLatest(useQuery(api.chatRequests.forPanel, viewerId ? { panelId: viewerId } : "skip"));
+  const mySent = useLatest(useQuery(api.chatRequests.forAttendee, viewerId ? { attendeeId: viewerId } : "skip"));
 
   const event = useMemo<EventInfo | undefined>(
     () =>
@@ -363,25 +305,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [rawUsers],
   );
 
+  // Open lines from everyone (no names or notes), overlaid with the full rows
+  // I'm allowed to see: my own line as a speaker and my own requests.
+  const requests = useMemo<ChatRequest[]>(() => {
+    const byId = new Map<string, ChatRequest>();
+    for (const r of openLines ?? []) {
+      byId.set(r._id, { id: r._id, panelId: r.panelId, attendeeId: "", note: "", status: r.status, createdAt: r.createdAt });
+    }
+    for (const r of [...(myLine ?? []), ...(mySent ?? [])]) {
+      byId.set(r._id, {
+        id: r._id,
+        panelId: r.panelId,
+        attendeeId: r.attendeeId,
+        note: r.note,
+        status: r.status,
+        createdAt: r.createdAt,
+        acceptedAt: r.acceptedAt,
+      });
+    }
+    return [...byId.values()];
+  }, [openLines, myLine, mySent]);
+
   // Restore my account from localStorage once users have loaded.
   useEffect(() => {
     if (!users || local.booted) return;
     const mine = local.myUserId ? users.find((u) => u.id === local.myUserId) : undefined;
     if (local.myUserId && !mine) saveMyId(null);
-    localDispatch({ type: "boot", myUserId: mine?.id ?? null, role: mine?.role, requests: demoRequests(users, Date.now()) });
+    localDispatch({ type: "boot", myUserId: mine?.id ?? null, role: mine?.role });
   }, [users, local.booted, local.myUserId]);
 
-  const latest = useRef({ local, users: users ?? [], zones, event });
+  const latest = useRef({ local, users: users ?? [], zones, event, requests });
   useEffect(() => {
-    latest.current = { local, users: users ?? [], zones, event };
+    latest.current = { local, users: users ?? [], zones, event, requests };
   });
 
   useEffect(() => {
-    if (users) localDispatch({ type: "tick", now: Date.now(), users });
-  }, [users, local.requests]);
+    if (users) localDispatch({ type: "tick", now: Date.now(), users, requests });
+  }, [users, requests]);
 
   useEffect(() => {
-    const t = setInterval(() => localDispatch({ type: "tick", now: Date.now(), users: latest.current.users }), 10_000);
+    const t = setInterval(() => {
+      const { users, requests } = latest.current;
+      localDispatch({ type: "tick", now: Date.now(), users, requests });
+    }, 10_000);
     return () => clearInterval(t);
   }, []);
 
@@ -389,7 +355,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const dispatch = useCallback<Dispatch<Action>>(
     (action) => {
-      const { local, users, zones, event } = latest.current;
+      const { local, users, zones, event, requests } = latest.current;
       const meId = local.currentUserId as Id<"users"> | null;
       const run = (p: Promise<unknown>) =>
         p.catch((e) => localDispatch({ type: "toast", message: errorMessage(e) }));
@@ -424,6 +390,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (meId) run(setUserStatus({ id: meId, status: "leaving", leavingInMin: action.minutes }));
           return;
 
+        case "requestChat":
+          if (!meId) return;
+          run(
+            createRequest({ attendeeId: meId, panelId: action.panelId as Id<"users">, note: action.note }).then(() =>
+              localDispatch({ type: "log", activityType: "request_chat", targetId: action.panelId }),
+            ),
+          );
+          return;
+
+        case "setRequestStatus": {
+          const req = requests.find((r) => r.id === action.requestId);
+          if (!meId || !req || action.status === "waiting") return;
+          const activityType: ActivityType | null =
+            action.status === "accepted" ? "accept_request" : action.status === "met" ? "mark_met" : null;
+          run(
+            setRequestStatus({
+              requestId: req.id as Id<"chatRequests">,
+              actorId: meId,
+              status: action.status,
+            }).then(() => {
+              if (activityType) localDispatch({ type: "log", activityType, targetId: req.panelId });
+            }),
+          );
+          return;
+        }
+
         case "viewAs": {
           const target = users.find((u) => u.id === action.userId);
           if (target) localDispatch({ type: "viewAs", userId: target.id, role: target.role });
@@ -431,7 +423,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         case "simulateAccept": {
-          const req = local.requests
+          const req = requests
             .filter((r) => r.attendeeId === local.currentUserId && r.status === "waiting")
             .sort((a, b) => a.createdAt - b.createdAt)[0];
           if (!req) {
@@ -440,13 +432,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           const panel = users.find((u) => u.id === req.panelId);
           const zone = zones.find((z) => z.id === panel?.zoneId);
-          localDispatch({ type: "setRequestStatus", requestId: req.id, status: "accepted" });
-          localDispatch({ type: "toast", message: `${panel?.name} is ready for you at ${zone?.name ?? "their zone"}.` });
+          run(
+            setRequestStatus({
+              requestId: req.id as Id<"chatRequests">,
+              actorId: req.panelId as Id<"users">,
+              status: "accepted",
+            }).then(() =>
+              localDispatch({ type: "toast", message: `${panel?.name} is ready for you at ${zone?.name ?? "their zone"}.` }),
+            ),
+          );
           return;
         }
 
         case "simulateLeaving": {
-          const req = local.requests.find(
+          const req = requests.find(
             (r) => r.attendeeId === local.currentUserId && (r.status === "waiting" || r.status === "accepted"),
           );
           if (!req) {
@@ -464,7 +463,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const role = users.find((u) => u.id === local.myUserId)?.role;
           run(
             resetDemo({ eventId: event.id as Id<"events"> }).then(() =>
-              localDispatch({ type: "reset", now: action.now, requests: demoRequests(users, action.now), role }),
+              localDispatch({ type: "reset", now: action.now, role }),
             ),
           );
           return;
@@ -474,12 +473,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           localDispatch(action);
       }
     },
-    [createUser, updateUser, setUserStatus, resetDemo],
+    [createUser, updateUser, setUserStatus, createRequest, setRequestStatus, resetDemo],
   );
 
   const value = useMemo<AppContextValue | null>(() => {
     if (!event || !users) return null;
-    const state: State = { ...local, event, zones, users };
+    const state: State = { ...local, event, zones, users, requests };
     const me = users.find((u) => u.id === local.currentUserId);
     return {
       state,
@@ -489,7 +488,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       navigate: (screen, replace) => dispatch({ type: "navigate", screen, replace }),
       back: () => dispatch({ type: "back" }),
     };
-  }, [local, event, zones, users, dispatch]);
+  }, [local, event, zones, users, requests, dispatch]);
 
   if (!event || !users || !local.booted) return <div className="min-h-dvh bg-bg" />;
 

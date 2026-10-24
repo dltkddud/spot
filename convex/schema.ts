@@ -58,7 +58,8 @@ export default defineSchema({
     acceptedAt: v.optional(v.number()),
   })
     .index("by_panel_status", ["panelId", "status"])
-    .index("by_attendee", ["attendeeId"]),
+    .index("by_attendee", ["attendeeId"])
+    .index("by_event_and_status", ["eventId", "status"]),
 
   activity: defineTable({
     eventId: v.id("events"),

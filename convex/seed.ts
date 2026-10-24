@@ -32,7 +32,17 @@ async function insertDemoPeople(
       seedKey: id,
     });
   }
+  await insertDemoRequests(ctx, eventId, userIds, now);
+}
+
+async function insertDemoRequests(
+  ctx: MutationCtx,
+  eventId: Id<"events">,
+  userIds: Record<string, Id<"users">>,
+  now: number,
+) {
   for (const { panelId, attendeeId, note, status, createdAt } of makeRequests(now)) {
+    if (!userIds[panelId] || !userIds[attendeeId]) continue;
     await ctx.db.insert("chatRequests", {
       eventId,
       note,
@@ -69,8 +79,8 @@ export const ensure = mutation({
   },
 });
 
-// "Reset demo": puts the demo people back where mockData starts them.
-// Real sign-ups are left alone.
+// "Reset demo": puts the demo people and their requests back where mockData
+// starts them. Real sign-ups, and requests between real sign-ups, are left alone.
 export const resetDemo = mutation({
   args: { eventId: v.id("events") },
   returns: v.null(),
@@ -91,6 +101,7 @@ export const resetDemo = mutation({
       .withIndex("by_event", (q) => q.eq("eventId", eventId))
       .take(1000);
     const bySeedKey = new Map(users.filter((u) => u.seedKey).map((u) => [u.seedKey!, u]));
+    const demoIds = new Set(users.filter((u) => u.seedKey).map((u) => u._id));
 
     for (const { id, zoneId, ...u } of makeUsers(now)) {
       const row = bySeedKey.get(id);
@@ -102,6 +113,17 @@ export const resetDemo = mutation({
         seedKey: id,
       });
     }
+
+    const requests = await ctx.db
+      .query("chatRequests")
+      .withIndex("by_event_and_status", (q) => q.eq("eventId", eventId))
+      .take(2000);
+    for (const r of requests) {
+      if (demoIds.has(r.panelId) || demoIds.has(r.attendeeId)) await ctx.db.delete("chatRequests", r._id);
+    }
+    const userIds: Record<string, Id<"users">> = {};
+    for (const [key, u] of bySeedKey) userIds[key] = u._id;
+    await insertDemoRequests(ctx, eventId, userIds, now);
     return null;
   },
 });
