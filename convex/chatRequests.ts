@@ -2,7 +2,9 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema";
+import { LEAVE_WARNING_MIN } from "../src/lib/time";
 
+const MIN = 60_000;
 const NOTE_MAX = 100;
 const ACTIVE = ["waiting", "accepted"] as const;
 
@@ -43,13 +45,19 @@ export const create = mutation({
       throw new ConvexError(`You're already in line for ${firstName(panel)}.`);
     }
 
+    // The heads-up job may already have run if they leave within 10 minutes.
+    const now = Date.now();
+    const leavingSoon =
+      panel.status === "leaving" && panel.leavingAt !== undefined && panel.leavingAt - now <= LEAVE_WARNING_MIN * MIN;
+
     return await ctx.db.insert("chatRequests", {
       eventId: panel.eventId,
       panelId,
       attendeeId,
       note: note.trim().slice(0, NOTE_MAX),
       status: "waiting",
-      createdAt: Date.now(),
+      createdAt: now,
+      ...(leavingSoon && { leaveWarnedFor: panel.leavingAt }),
     });
   },
 });

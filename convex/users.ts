@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { OUTFIT_WORD_LIMIT } from "../src/lib/mockData";
+import { scheduleLeaving } from "./leaving";
 import schema from "./schema";
 
 const MIN = 60_000;
@@ -72,7 +73,8 @@ export const update = mutation({
   },
 });
 
-// "available" / "talking" clear any leaving time. "leaving" needs minutes from now.
+// "available" / "talking" clear any leaving time, which also turns the old
+// leaving jobs into no-ops. "leaving" needs minutes from now.
 export const setStatus = mutation({
   args: {
     id: v.id("users"),
@@ -88,7 +90,9 @@ export const setStatus = mutation({
       if (leavingInMin === undefined || !(leavingInMin > 0)) {
         throw new ConvexError("Pick when you're leaving.");
       }
-      await ctx.db.patch("users", id, { status, leavingAt: now + leavingInMin * MIN, updatedAt: now });
+      const leavingAt = now + leavingInMin * MIN;
+      await ctx.db.patch("users", id, { status, leavingAt, updatedAt: now });
+      await scheduleLeaving(ctx, id, leavingAt);
     } else {
       await ctx.db.patch("users", id, { status, leavingAt: undefined, updatedAt: now });
     }

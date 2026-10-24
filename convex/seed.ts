@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import { mutation, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { makeEvent, makeRequests, makeUsers, ZONES } from "../src/lib/mockData";
+import { scheduleEventEnd } from "./events";
+import { scheduleLeaving } from "./leaving";
 
 async function insertZones(ctx: MutationCtx, eventId: Id<"events">) {
   const zoneIds: Record<string, Id<"zones">> = {};
@@ -31,6 +33,7 @@ async function insertDemoPeople(
       zoneId: zoneId ? zoneIds[zoneId] : undefined,
       seedKey: id,
     });
+    if (u.leavingAt) await scheduleLeaving(ctx, userIds[id], u.leavingAt);
   }
   await insertDemoRequests(ctx, eventId, userIds, now);
 }
@@ -67,6 +70,7 @@ export const ensure = mutation({
         .withIndex("by_event", (q) => q.eq("eventId", existing._id))
         .first();
       if (!zone) await insertZones(ctx, existing._id);
+      await scheduleEventEnd(ctx, existing._id);
       return existing._id;
     }
 
@@ -75,17 +79,22 @@ export const ensure = mutation({
     const eventId = await ctx.db.insert("events", { name, venue, endsAt });
     const zoneIds = await insertZones(ctx, eventId);
     await insertDemoPeople(ctx, eventId, zoneIds, now);
+    await scheduleEventEnd(ctx, eventId);
     return eventId;
   },
 });
 
 // "Reset demo": puts the demo people and their requests back where mockData
-// starts them. Real sign-ups, and requests between real sign-ups, are left alone.
+// starts them, and moves the event end 3 hours out again. Real sign-ups, and
+// requests between real sign-ups, are left alone.
 export const resetDemo = mutation({
   args: { eventId: v.id("events") },
   returns: v.null(),
   handler: async (ctx, { eventId }) => {
     const now = Date.now();
+    await ctx.db.patch("events", eventId, { endsAt: makeEvent(now).endsAt });
+    await scheduleEventEnd(ctx, eventId);
+
     const zones = await ctx.db
       .query("zones")
       .withIndex("by_event", (q) => q.eq("eventId", eventId))
@@ -112,6 +121,7 @@ export const resetDemo = mutation({
         zoneId: zoneId ? zoneIds[zoneId] : undefined,
         seedKey: id,
       });
+      if (u.leavingAt) await scheduleLeaving(ctx, row._id, u.leavingAt);
     }
 
     const requests = await ctx.db

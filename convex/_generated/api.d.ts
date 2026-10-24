@@ -10,6 +10,7 @@
 
 import type * as chatRequests from "../chatRequests.js";
 import type * as events from "../events.js";
+import type * as leaving from "../leaving.js";
 import type * as seed from "../seed.js";
 import type * as users from "../users.js";
 
@@ -22,6 +23,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   chatRequests: typeof chatRequests;
   events: typeof events;
+  leaving: typeof leaving;
   seed: typeof seed;
   users: typeof users;
 }>;

@@ -16,11 +16,12 @@ import {
 } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { LEAVE_WARNING_MIN } from "./time";
+import { LEAVE_WARNING_MIN, minutesUntil } from "./time";
 import type {
   Activity,
   ActivityType,
   ChatRequest,
+  RequestStatus,
   EventInfo,
   Role,
   Status,
@@ -29,7 +30,6 @@ import type {
   Zone,
 } from "./types";
 
-const MIN = 60_000;
 const MY_ID_KEY = "spot.myUserId";
 
 export type Screen =
@@ -60,7 +60,6 @@ type LocalState = {
   now: number;
   activity: Activity[];
   toasts: Toast[];
-  warned: string[];
   currentUserId: string | null;
   myUserId: string | null;
   stack: Screen[];
@@ -97,7 +96,7 @@ type LocalAction =
       Action,
       { type: "navigate" | "back" | "resetTo" | "log" | "toast" | "dismissToast" }
     >
-  | { type: "tick"; now: number; users: User[]; requests: ChatRequest[] }
+  | { type: "tick"; now: number }
   | { type: "boot"; myUserId: string | null; role?: Role }
   | { type: "signedIn"; userId: string }
   | { type: "viewAs"; userId: string; role: Role }
@@ -128,7 +127,6 @@ function initialState(now: number, myUserId: string | null): LocalState {
     now,
     activity: [],
     toasts: [],
-    warned: [],
     currentUserId: null,
     myUserId,
     stack: [{ name: "welcome" }],
@@ -144,38 +142,12 @@ function addToast(state: LocalState, message: string): LocalState {
   return { ...state, toasts: [...state.toasts, { id: newId("t"), message }].slice(-3) };
 }
 
-// Stage 2: only the 10-minute heads-up is still checked in the browser.
-// Stage 3 moves leaving to the server scheduler.
-function runScheduled(state: LocalState, users: User[], requests: ChatRequest[]): LocalState {
-  let next = state;
-  const now = state.now;
-
-  for (const p of users) {
-    if (p.role !== "panel" || p.status !== "leaving" || !p.leavingAt || !p.visible) continue;
-    if (p.leavingAt <= now || p.leavingAt - now > LEAVE_WARNING_MIN * MIN) continue;
-
-    const mine = requests.find(
-      (r) =>
-        r.panelId === p.id &&
-        r.attendeeId === next.currentUserId &&
-        (r.status === "waiting" || r.status === "accepted") &&
-        !next.warned.includes(`${r.id}:${p.leavingAt}`),
-    );
-    if (mine) {
-      const mins = Math.max(1, Math.ceil((p.leavingAt - now) / MIN));
-      next = addToast(next, `${p.name} leaves in ${mins} min. Head over now if you can.`);
-      next = { ...next, warned: [...next.warned, `${mine.id}:${p.leavingAt}`] };
-    }
-  }
-  return next;
-}
-
 function reducer(state: LocalState, action: LocalAction): LocalState {
   const meId = state.currentUserId;
 
   switch (action.type) {
     case "tick":
-      return runScheduled({ ...state, now: action.now }, action.users, action.requests);
+      return { ...state, now: action.now };
 
     case "navigate": {
       const stack = action.replace ? [...state.stack.slice(0, -1), action.screen] : [...state.stack, action.screen];
@@ -321,6 +293,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         status: r.status,
         createdAt: r.createdAt,
         acceptedAt: r.acceptedAt,
+        leaveWarnedFor: r.leaveWarnedFor,
       });
     }
     return [...byId.values()];
@@ -339,23 +312,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
     latest.current = { local, users: users ?? [], zones, event, requests };
   });
 
+  // Keeps "3 min ago" and countdowns fresh. Leaving itself runs on the server.
   useEffect(() => {
-    if (users) localDispatch({ type: "tick", now: Date.now(), users, requests });
-  }, [users, requests]);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      const { users, requests } = latest.current;
-      localDispatch({ type: "tick", now: Date.now(), users, requests });
-    }, 10_000);
+    const t = setInterval(() => localDispatch({ type: "tick", now: Date.now() }), 10_000);
     return () => clearInterval(t);
   }, []);
+
+  // Banners for my own requests: accepted, missed because the speaker left,
+  // and the 10-minute heads-up the server marks on each open request.
+  const seen = useRef<{ viewerId: string; status: Map<string, RequestStatus>; warned: Set<string> } | null>(null);
+  useEffect(() => {
+    if (!viewerId || !users || !mySent) return;
+    if (mySent.some((r) => r.attendeeId !== viewerId)) return; // still showing the previous viewer's rows
+    if (seen.current?.viewerId !== viewerId) seen.current = { viewerId, status: new Map(), warned: new Set() };
+    const { status, warned } = seen.current;
+    const now = Date.now();
+
+    for (const r of mySent) {
+      const panel = users.find((u) => u.id === r.panelId);
+      const before = status.get(r._id);
+      status.set(r._id, r.status);
+      if (!panel) continue;
+
+      if (before && before !== r.status) {
+        if (r.status === "accepted") {
+          const zone = zones.find((z) => z.id === panel.zoneId);
+          localDispatch({ type: "toast", message: `${panel.name} is ready for you at ${zone?.name ?? "their zone"}.` });
+        } else if (r.status === "missed" && !panel.visible) {
+          localDispatch({ type: "toast", message: `${panel.name} has left. Your request moved to missed.` });
+        }
+      }
+
+      const key = `${r._id}:${r.leaveWarnedFor}`;
+      if (
+        (r.status === "waiting" || r.status === "accepted") &&
+        r.leaveWarnedFor !== undefined &&
+        panel.status === "leaving" &&
+        panel.leavingAt === r.leaveWarnedFor &&
+        panel.leavingAt > now &&
+        !warned.has(key)
+      ) {
+        warned.add(key);
+        const mins = Math.max(1, minutesUntil(panel.leavingAt, now));
+        localDispatch({ type: "toast", message: `${panel.name} leaves in ${mins} min. Head over now if you can.` });
+      }
+    }
+  }, [viewerId, users, zones, mySent]);
 
   const creating = useRef(false);
 
   const dispatch = useCallback<Dispatch<Action>>(
     (action) => {
-      const { local, users, zones, event, requests } = latest.current;
+      const { local, users, event, requests } = latest.current;
       const meId = local.currentUserId as Id<"users"> | null;
       const run = (p: Promise<unknown>) =>
         p.catch((e) => localDispatch({ type: "toast", message: errorMessage(e) }));
@@ -430,16 +438,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             localDispatch({ type: "toast", message: "Send a chat request first, then try this again." });
             return;
           }
-          const panel = users.find((u) => u.id === req.panelId);
-          const zone = zones.find((z) => z.id === panel?.zoneId);
           run(
             setRequestStatus({
               requestId: req.id as Id<"chatRequests">,
               actorId: req.panelId as Id<"users">,
               status: "accepted",
-            }).then(() =>
-              localDispatch({ type: "toast", message: `${panel?.name} is ready for you at ${zone?.name ?? "their zone"}.` }),
-            ),
+            }),
           );
           return;
         }

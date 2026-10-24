@@ -44,6 +44,7 @@ export type ChatRequest = {
   status: RequestStatus;
   createdAt: number;
   acceptedAt?: number;
+  leaveWarnedFor?: number;
 };
 
 export type ActivityType =

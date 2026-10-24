@@ -6,6 +6,8 @@ export default defineSchema({
     name: v.string(),
     venue: v.string(),
     endsAt: v.number(),
+    // The endsAt value the end-of-event cleanup is currently scheduled for.
+    cleanupScheduledFor: v.optional(v.number()),
   }),
 
   zones: defineTable({
@@ -56,6 +58,8 @@ export default defineSchema({
     ),
     createdAt: v.number(),
     acceptedAt: v.optional(v.number()),
+    // Set to the speaker's leavingAt once the 10-minute heads-up has gone out.
+    leaveWarnedFor: v.optional(v.number()),
   })
     .index("by_panel_status", ["panelId", "status"])
     .index("by_attendee", ["attendeeId"])
