@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-2: #f5f7fa;
+  --ink: #14213d;
+  --muted: #5a6478;
+  --line: #d9dfe8;
+  --go: #0e9f55;
+  --go-soft: #dcf4e7;
+  --busy: #dc3a41;
+  --busy-soft: #fbe2e3;
+  --soon: #f2a000;
+  --soon-soft: #fff0cc;
+  --on-soon: #3a2700;
+  --go-ink: #087a40;
+  --busy-ink: #b3242b;
+  --soon-ink: #8a5a00;
+  --board: #14213d;
+  --board-text: #ffd166;
+  --board-dim: #93a3c4;
+  --focus: #3d7bff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1424;
+    --surface: #162036;
+    --surface-2: #1c2842;
+    --ink: #e8edf7;
+    --muted: #9aa6bf;
+    --line: #2a3754;
+    --go: #2bc473;
+    --go-soft: #12301f;
+    --busy: #ff646a;
+    --busy-soft: #3a1a1f;
+    --soon: #ffb627;
+    --soon-soft: #3a2c0e;
+    --on-soon: #2a1c00;
+    --go-ink: #5ddc95;
+    --busy-ink: #ff8f94;
+    --soon-ink: #ffc24d;
+    --board: #070c17;
+    --board-text: #ffd166;
+    --board-dim: #7182a6;
+    --focus: #6f9bff;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0d1424;
+  --surface: #162036;
+  --surface-2: #1c2842;
+  --ink: #e8edf7;
+  --muted: #9aa6bf;
+  --line: #2a3754;
+  --go: #2bc473;
+  --go-soft: #12301f;
+  --busy: #ff646a;
+  --busy-soft: #3a1a1f;
+  --soon: #ffb627;
+  --soon-soft: #3a2c0e;
+  --on-soon: #2a1c00;
+  --go-ink: #5ddc95;
+  --busy-ink: #ff8f94;
+  --soon-ink: #ffc24d;
+  --board: #070c17;
+  --board-text: #ffd166;
+  --board-dim: #7182a6;
+  --focus: #6f9bff;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-go: var(--go);
+  --color-go-soft: var(--go-soft);
+  --color-busy: var(--busy);
+  --color-busy-soft: var(--busy-soft);
+  --color-soon: var(--soon);
+  --color-soon-soft: var(--soon-soft);
+  --color-on-soon: var(--on-soon);
+  --color-go-ink: var(--go-ink);
+  --color-busy-ink: var(--busy-ink);
+  --color-soon-ink: var(--soon-ink);
+  --color-board: var(--board);
+  --color-board-text: var(--board-text);
+  --color-board-dim: var(--board-dim);
+  --font-sans: "Overpass", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 40;
+  background: var(--bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-in {
+  animation: toast-in 180ms ease-out;
+}
