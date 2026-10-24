@@ -250,7 +250,7 @@ export const inputClass =
 
 export function Header({ title, onBack, right }: { title: string; onBack?: () => void; right?: ReactNode }) {
   return (
-    <header className="sticky top-[env(safe-area-inset-top,0px)] z-20 flex h-14 items-center gap-2 border-b border-line bg-bg/95 px-4 backdrop-blur">
+    <header className="sticky top-[var(--safe-top)] z-20 flex h-14 items-center gap-2 border-b border-line bg-bg/95 px-4 backdrop-blur">
       {onBack && (
         <button onClick={onBack} className="-ml-2 grid h-10 w-10 place-items-center rounded-full" aria-label="Go back">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -374,7 +374,7 @@ export function TabBar() {
             <button
               key={t.label}
               onClick={() => dispatch({ type: "resetTo", screen: t.screen })}
-              className={`relative flex flex-1 flex-col items-center gap-0.5 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 text-[11px] font-bold ${
+              className={`relative flex flex-1 flex-col items-center gap-0.5 pb-[max(10px,var(--safe-bottom))] pt-2.5 text-[11px] font-bold ${
                 active ? "text-primary" : "text-muted"
               }`}
               aria-current={active ? "page" : undefined}
@@ -405,7 +405,7 @@ export function Toasts() {
   }, [latest, dispatch]);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top,0px)+12px)] z-50 mx-auto flex max-w-[480px] flex-col gap-2 px-4">
+    <div className="pointer-events-none fixed inset-x-0 top-[calc(var(--safe-top)+12px)] z-50 mx-auto flex max-w-[480px] flex-col gap-2 px-4">
       {state.toasts.map((t) => (
         <div
           key={t.id}

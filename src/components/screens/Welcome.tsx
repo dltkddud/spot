@@ -10,7 +10,7 @@ export function Welcome() {
   const free = state.users.filter((u) => u.role === "panel" && u.status === "available" && u.visible).length;
 
   return (
-    <main className="flex min-h-dvh flex-col px-6 pb-10 pt-16">
+    <main className="flex min-h-[var(--app-h)] flex-col px-6 pb-10 pt-16">
       <Logo size="lg" />
 
       <h1 className="mt-14 text-[2.6rem] font-black leading-[1.02] tracking-tight">

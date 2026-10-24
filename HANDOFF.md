@@ -4,7 +4,7 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-23 23:58 PT
+마지막 업데이트: 2026-10-24 00:04 PT
 
 ---
 
@@ -101,6 +101,10 @@ Anthropic 트랙은 Devpost 목록에 아직 없어서 Slack Anthropic 채널에
 ```
 - **화면은 Convex를 직접 부르지 않는다.** 모든 읽기·쓰기는 `store.tsx`를 거친다. 새 기능도 store에 동작을 추가하고 화면은 `useApp()`으로 쓴다.
 - 앱은 클라이언트에서만 렌더링한다 (`src/app/ClientApp.tsx`의 `dynamic(..., { ssr: false })`).
+- **노트북에서는 휴대폰 프레임 안에서 동작**한다 (`PhoneFrame.tsx`). 가로 640px 이상이고 홈 화면 앱이 아니면 390×844 프레임을 띄우고, 화면이 낮으면 비율을 유지한 채 줄인다. 폰이나 홈 화면 앱은 프레임 없이 전체 화면.
+  - 프레임의 화면 영역에 `transform`이 걸려 있어 `position: fixed`(탭바, 알림 배너)가 브라우저 창이 아니라 프레임에 붙는다. 스크롤은 `#spot-scroll`에서만 일어난다.
+  - 화면 높이·안전 영역은 CSS 변수로 쓴다: `min-h-[var(--app-h)]`, `top-[var(--safe-top)]`, `var(--safe-bottom)`. `min-h-dvh`나 `env(safe-area-inset-*)`를 새로 쓰지 말 것.
+  - 화면 맨 위로 스크롤할 때는 `window.scrollTo` 대신 `scrollAppToTop()`.
 - **로그인 없음**: `users.create`가 돌려준 내 id를 localStorage(`spot.myUserId`)에 저장해 새로고침해도 이어진다. 브라우저마다 다른 계정.
 - **행사는 하나라고 가정**: 앱 시작 시 `seed.ensure`가 행사·구역·예시 사람·예시 요청을 비어 있을 때만 채운다.
 
@@ -127,6 +131,7 @@ src/
     FloorPlan.tsx   평면도 위 구역 핀(혼잡도 색), 구역 확대 보기, 범례, 구역 아이콘
     Huddle.tsx      참석자용 Huddle 카드(제안·대기·완성·Stay connected), 패널용 묶음 카드
     ZoneIcon.tsx    구역 아이콘 7개(24 격자, 선 두께 2)와 ZoneMark(핀 안 아이콘 + 코드 배지). 구역이 나오는 모든 곳에서 사용
+    PhoneFrame.tsx  노트북용 휴대폰 프레임(상태바, 축소 맞춤), scrollAppToTop
     Connections.tsx Your people 줄, 위치 공개 범위 선택, Connect with friends(코드·링크 복사·코드 입력·연결 목록)
     screens/        Welcome, Onboarding, ZonePicker, Discover, Zones, PanelDetail,
                     MyRequests, PanelNow(패널 홈), Me(설정·지표·데모 컨트롤)
@@ -209,7 +214,7 @@ src/
 - [x] Huddle: 같은 줄 관심사 매칭, 함께 수락·만남, Stay connected, Open to huddles, 데모 버튼
 - [x] Connections: 연결 코드·초대 링크, 위치 공개 범위(Everyone / Only my connections / No one), Your people, Zones 표시, 데모 버튼
 - [x] 구역 아이콘 통일: Pavilion 텐트, Atrium 기둥 홀, Breakouts 1–4 문 2개, Broadway 복도·화살표, Broadway 3 출입문, Breakouts 5–7 문 3개, Theater 무대·커튼
-- [ ] 노트북용 휴대폰 화면 프레임
+- [x] 노트북용 휴대폰 화면 프레임 (라이트·다크, 낮은 화면 축소, 폰에서는 전체 화면)
 - [ ] 폰 홈 화면 앱(PWA) (8-5)
 - [ ] Stage 6-1: 패널 쪽 3줄 브리핑 (8-6)
 - [ ] Stage 6-2: 놓쳤을 때 후속 메시지 (8-6)
@@ -403,3 +408,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/23 23:50 Huddle (관심사 겹치는 대기자끼리 함께 만나기, 묶음 수락, Stay connected, 활동 숫자)
 - 10/23 23:54 Connections (연결 코드·초대 링크, 위치 공개 범위, Your people)
 - 10/23 23:58 구역 아이콘 통일 (평면도 핀·구역 배지·카드에 같은 아이콘 + 코드 배지)
+- 10/24 00:04 노트북용 휴대폰 화면 프레임 (탭바·알림·스크롤이 프레임 안에서 동작)

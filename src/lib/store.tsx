@@ -748,7 +748,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [local, event, zones, users, requests, zoneActivity, huddles, stats, connections, dispatch]);
 
-  if (!event || !users || !local.booted) return <div className="min-h-dvh bg-bg" />;
+  if (!event || !users || !local.booted) return <div className="min-h-[var(--app-h)] bg-bg" />;
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

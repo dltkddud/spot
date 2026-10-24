@@ -12,6 +12,7 @@ import { PanelNow } from "./screens/PanelNow";
 import { Welcome } from "./screens/Welcome";
 import { ZonePicker } from "./screens/ZonePicker";
 import { ZoneDetail, Zones } from "./screens/Zones";
+import { PhoneFrame, scrollAppToTop } from "./PhoneFrame";
 import { PinMark, StillHerePrompt, TabBar, Toasts } from "./ui";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -19,7 +20,7 @@ const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 function HomeHeader() {
   const { state, me } = useApp();
   return (
-    <header className="sticky top-[env(safe-area-inset-top,0px)] z-20 flex h-14 items-center gap-3 border-b border-line bg-bg/95 px-5 backdrop-blur">
+    <header className="sticky top-[var(--safe-top)] z-20 flex h-14 items-center gap-3 border-b border-line bg-bg/95 px-5 backdrop-blur">
       <PinMark size={30} />
       <span className="flex-1 leading-tight">
         <span className="block text-base font-black">Spot</span>
@@ -34,7 +35,7 @@ function Router() {
   const { screen, me, state } = useApp();
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    scrollAppToTop();
   }, [state.stack.length, screen.name]);
 
   const withTabs = (node: ReactNode, home = false) => (
@@ -73,12 +74,14 @@ function Router() {
 export default function App() {
   return (
     <ConvexProvider client={convex}>
-      <AppProvider>
-        <div className="mx-auto min-h-dvh max-w-[480px] bg-bg sm:border-x sm:border-line">
-          <Router />
-        </div>
-        <Toasts />
-      </AppProvider>
+      <PhoneFrame>
+        <AppProvider>
+          <div className="mx-auto min-h-[var(--app-h)] max-w-[480px] bg-bg">
+            <Router />
+          </div>
+          <Toasts />
+        </AppProvider>
+      </PhoneFrame>
     </ConvexProvider>
   );
 }
