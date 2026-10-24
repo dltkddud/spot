@@ -30,11 +30,12 @@ export function Me() {
     { label: "Picks opened", value: count("click_recommendation") },
   ];
 
+  const demoId = (seedKey: string) => state.users.find((u) => u.seedKey === seedKey)?.id;
   const viewAsOptions = [
     ...(state.myUserId ? [{ id: state.myUserId, label: "You" }] : []),
-    { id: "p-dana", label: "Dana (speaker)" },
-    { id: "a-lena", label: "Lena (attendee)" },
-  ];
+    { id: demoId("p-dana"), label: "Dana (speaker)" },
+    { id: demoId("a-lena"), label: "Lena (attendee)" },
+  ].filter((o): o is { id: string; label: string } => !!o.id);
 
   return (
     <>

@@ -1,5 +1,6 @@
 "use client";
 
+import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { useEffect, type ReactNode } from "react";
 import { AppProvider, useApp } from "@/lib/store";
 import { Discover } from "./screens/Discover";
@@ -12,6 +13,8 @@ import { Welcome } from "./screens/Welcome";
 import { ZonePicker } from "./screens/ZonePicker";
 import { ZoneDetail, Zones } from "./screens/Zones";
 import { TabBar, Toasts } from "./ui";
+
+const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 function HomeHeader() {
   const { state, me } = useApp();
@@ -68,11 +71,13 @@ function Router() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <div className="mx-auto min-h-dvh max-w-[480px] bg-bg sm:border-x sm:border-line">
-        <Router />
-      </div>
-      <Toasts />
-    </AppProvider>
+    <ConvexProvider client={convex}>
+      <AppProvider>
+        <div className="mx-auto min-h-dvh max-w-[480px] bg-bg sm:border-x sm:border-line">
+          <Router />
+        </div>
+        <Toasts />
+      </AppProvider>
+    </ConvexProvider>
   );
 }

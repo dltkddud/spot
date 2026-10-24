@@ -35,6 +35,8 @@ export default defineSchema({
     visible: v.boolean(),
     requestsPaused: v.boolean(),
     updatedAt: v.number(),
+    // Demo people created by seed keep their mockData id here (e.g. "p-dana").
+    seedKey: v.optional(v.string()),
   })
     .index("by_event", ["eventId"])
     .index("by_event_role", ["eventId", "role"]),

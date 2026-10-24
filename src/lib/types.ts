@@ -33,6 +33,7 @@ export type User = {
   visible: boolean;
   requestsPaused: boolean;
   updatedAt: number;
+  seedKey?: string;
 };
 
 export type ChatRequest = {
