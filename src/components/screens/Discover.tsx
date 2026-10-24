@@ -51,7 +51,7 @@ function LeavingBoard() {
                 onClick={() => navigate({ name: "panelDetail", panelId: p.id })}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
               >
-                {zone ? <ZoneMark code={zone.code} size={32} /> : <span className="w-[26px]" />}
+                {zone ? <ZoneMark zone={zone} size={32} /> : <span className="w-[26px]" />}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-bold">{p.name}</span>
                   <span className="block truncate text-xs text-board-dim">

@@ -6,7 +6,7 @@ import { minutesAgo } from "@/lib/time";
 import type { ShareWith, User } from "@/lib/types";
 import { Avatar, Button, Icon, inputClass, PillButton, SectionTitle, StatusPill, ZoneBadge } from "./ui";
 
-// The people I'm connected with, as I'm allowed to see them right now.
+// The people I'm connected with who are at this event, as I'm allowed to see them.
 export function useMyPeople(): User[] {
   const { state } = useApp();
   return state.connections
@@ -108,14 +108,14 @@ export function ShareWithPicker() {
 
 // Me: my code, invite link, a box for a friend's code, and my connections.
 export function ConnectWithFriends() {
-  const { state, me, dispatch } = useApp();
-  const people = useMyPeople();
+  const { state, dispatch } = useApp();
   const [code, setCode] = useState("");
   const [copied, setCopied] = useState(false);
   const linkBox = useRef<HTMLInputElement>(null);
-  if (!me) return null;
+  const myCode = state.profile?.connectCode;
+  if (!state.profile) return null;
 
-  const link = me.connectCode ? `${window.location.origin}/?connect=${me.connectCode}` : "";
+  const link = myCode ? `${window.location.origin}/?connect=${myCode}` : "";
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(link);
@@ -138,12 +138,12 @@ export function ConnectWithFriends() {
       <SectionTitle aside="Zones only, never GPS">Connect with friends</SectionTitle>
       <section className="rounded-2xl border border-line bg-surface p-4">
         <p className="text-sm text-muted">
-          Connect before the event. When you pick a zone, your connections see it automatically.
+          Connect once. At any event you&apos;re both at, your connections see the zone you pick.
         </p>
         <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface-2 p-3">
           <span>
             <span className="block text-xs font-semibold text-muted">Your code</span>
-            <span className="block font-mono text-2xl font-black tracking-[0.25em]">{me.connectCode ?? "······"}</span>
+            <span className="block font-mono text-2xl font-black tracking-[0.25em]">{myCode ?? "······"}</span>
           </span>
           <PillButton icon="copy" onClick={copy} disabled={!link}>
             {copied ? "Link copied" : "Copy invite link"}
@@ -178,21 +178,36 @@ export function ConnectWithFriends() {
         </form>
       </section>
 
-      {people.length > 0 && (
+      {state.connections.length > 0 && (
         <ul className="mt-3 divide-y divide-line rounded-2xl border border-line bg-surface">
-          {people.map((p) => {
-            const zone = p.visible ? state.zones.find((z) => z.id === p.zoneId) : undefined;
+          {state.connections.map((c) => {
+            const p = state.users.find((u) => u.id === c.userId);
+            const zone = p?.visible ? state.zones.find((z) => z.id === p.zoneId) : undefined;
             return (
-              <li key={p.id} className="flex items-center gap-3 p-3">
-                <Avatar user={p} size={36} />
+              <li key={c.profileId} className="flex items-center gap-3 p-3">
+                {p ? (
+                  <Avatar user={p} size={36} />
+                ) : (
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-2 text-sm font-bold">
+                    {c.name
+                      .split(" ")
+                      .map((w) => w[0])
+                      .slice(0, 2)
+                      .join("")}
+                  </span>
+                )}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-bold">{p.name}</span>
+                  <span className="block truncate font-bold">{c.name}</span>
                   <span className="mt-0.5 block">
-                    {zone ? <ZoneBadge zone={zone} /> : <span className="text-xs text-muted">Not sharing a zone</span>}
+                    {zone ? (
+                      <ZoneBadge zone={zone} />
+                    ) : (
+                      <span className="text-xs text-muted">{p ? "Not sharing a zone" : `Not at ${state.event.name}`}</span>
+                    )}
                   </span>
                 </span>
                 <button
-                  onClick={() => dispatch({ type: "removeConnection", userId: p.id })}
+                  onClick={() => dispatch({ type: "removeConnection", profileId: c.profileId })}
                   className="rounded-full px-3 py-1.5 text-sm font-bold text-muted transition hover:bg-busy-soft hover:text-busy-ink"
                 >
                   Remove

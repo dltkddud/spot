@@ -4,14 +4,14 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-24 07:21 PT
+마지막 업데이트: 2026-10-24 07:43 PT
 
 ---
 
 ## 0. 30초 요약
 
 - **무엇**: 행사장에서 대화하고 싶은 패널(발표자·프로덕트 제작자)을 놓치지 않게 돕는 실시간 네트워킹 웹앱 **Spot**
-- **어디까지**: 화면 전체 완성, 사용자·대화 요청·떠나기 알림·행사 종료 정리까지 Convex로 연결, Vercel 배포 완료 (Stage 0~3). 평면도·파란색 디자인, **Huddle**(같은 줄의 관심사 겹치는 사람끼리 함께 만나기), **Connections**(미리 연결한 사람과 구역 자동 공유) 적용
+- **어디까지**: 화면 전체 완성, 사용자·대화 요청·떠나기 알림·행사 종료 정리까지 Convex로 연결, Vercel 배포 완료 (Stage 0~3). 평면도·파란색 디자인, **Huddle**(같은 줄의 관심사 겹치는 사람끼리 함께 만나기), **Connections**(미리 연결한 사람과 구역 자동 공유), **여러 행사·행사별 역할·프로필 수정** 적용
 - **데모 주소**: https://spot-psi-two.vercel.app
 - 행사 종료 시각은 일 10/25 16:00 PT로 고정됨 (`EVENT_ENDS_AT`, 8-1 완료)
 - **그다음**: Stage 4 AI 추천 (Claude API 키 필요)
@@ -110,21 +110,28 @@ Anthropic 트랙은 Devpost 목록에 아직 없어서 Slack Anthropic 채널에
   - 프레임의 화면 영역에 `transform`이 걸려 있어 `position: fixed`(탭바, 알림 배너)가 브라우저 창이 아니라 프레임에 붙는다. 스크롤은 `#spot-scroll`에서만 일어난다.
   - 화면 높이·안전 영역은 CSS 변수로 쓴다: `min-h-[var(--app-h)]`, `top-[var(--safe-top)]`, `var(--safe-bottom)`. `min-h-dvh`나 `env(safe-area-inset-*)`를 새로 쓰지 말 것.
   - 화면 맨 위로 스크롤할 때는 `window.scrollTo` 대신 `scrollAppToTop()`.
-- **로그인 없음**: `users.create`가 돌려준 내 id를 localStorage(`spot.myUserId`)에 저장해 새로고침해도 이어진다. 브라우저마다 다른 계정.
-- **행사는 하나라고 가정**: 앱 시작 시 `seed.ensure`가 행사·구역·예시 사람·예시 요청을 비어 있을 때만 채운다.
+- **프로필과 행사 참가가 따로다**:
+  - `profiles`(계정 단위): 이름, 한 줄 소개, 관심사, LinkedIn, 기타 링크, 연결 코드, Open to huddles. 모든 행사 공통.
+  - `users`(행사 참가 단위): 행사, profileId, 역할(panel/attendee = Speaker/Guest), 발표·프로덕트 제목, 오늘의 인상착의, 구역, 상태, 떠나는 시간, 공개 범위, 요청 일시정지. `chatRequests`와 `huddles`는 이 참가 id를 쓴다.
+  - `users.listByEvent`가 참가 기록에 프로필을 붙여서 돌려주므로, 화면의 `User`는 예전처럼 이름·관심사까지 다 들어 있다.
+  - 연결(`profileConnections`)은 프로필끼리라, 한 번 연결하면 같이 들어간 모든 행사에서 구역이 공유된다.
+- **로그인 없음**: localStorage `spot.profileId`(내 프로필)와 `spot.eventId`(마지막으로 본 행사). 예전 브라우저에 `spot.myUserId`(참가 id)만 있으면 `profiles.claimFromParticipation`이 그 참가 기록의 프로필로 이어 준다.
+- **화면 흐름**: Welcome → 프로필 만들기(처음 한 번) → Events 목록 → 행사 들어가기 → 역할 선택 → (Speaker면 발표 제목) → 인상착의 → 구역 선택. 홈 위쪽 헤더에 행사 이름과 역할(Speaker/Guest), 누르면 Events 목록. Me → Edit profile에서 공통 정보와 이 행사 정보를 고친다. Speaker → Guest로 바꿀 때 줄에 사람이 있으면 화면에서 확인을 받고, 그 요청들은 떠났을 때와 같이 missed가 된다.
+- **행사 여러 개**: `mockData.ts`의 `EVENTS`(Cal Hacks 13.0, Founders & Coffee SF, Bay Area Robotics Expo). 앱을 열면 `seed.ensure`가 key로 찾아 없으면 만들고(구역·예시 사람·요청 포함), 있으면 이름·시간·구역·예시 프로필만 맞춘다. 행사마다 종료 시각과 종료 정리 예약이 따로다. 평면도는 `floorPlan`이 있는 행사(Cal Hacks)만, 나머지는 Map에서 구역 목록만.
 
 **폴더**
 ```
 convex/
   schema.ts         표: events, zones, users, chatRequests, activity
-  events.ts         current(행사+구역 읽기), scheduleEventEnd, endEvent(종료 시 정리)
-  users.ts          create, update, setStatus, listByEvent
+  profiles.ts       create, update, get, participations(내가 들어간 행사와 역할), claimFromParticipation, ensureCode
+  events.ts         list, get(행사+구역), join(행사 참가), scheduleEventEnd, endEvent(행사별 종료 정리)
+  users.ts          update(구역·인상착의·공개 범위·일시정지·역할·발표 제목), setStatus, listByEvent(참가+프로필)
   chatRequests.ts   create, setStatus, forPanel, forAttendee, activeByEvent (요청이 바뀌면 Huddle 매칭·해산 호출)
   huddles.ts        proposeFor(매칭), afterRequestChange, dissolveAllFor, respond, setGroupStatus, demoPropose, forAttendee, forPanel
-  connections.ts    connect·disconnect, ensureCode, connectByCode, remove, demoFriends, mine
+  connections.ts    프로필끼리 connect·disconnect, connectByCode, remove, demoFriends, mine
   activity.ts       record (서버 기록), summary (행사 전체 숫자)
-  leaving.ts        scheduleLeaving, warn(10분 전), leave(떠나는 시각)
-  seed.ts           ensure(처음 채우기), resetDemo(데모 초기화)
+  leaving.ts        scheduleLeaving, warn(10분 전), leave(떠나는 시각), closeLine(줄 닫기: 떠날 때·Speaker→Guest)
+  seed.ts           ensure(마이그레이션 + 행사 채우기·맞추기), resetDemo(지금 행사의 데모 초기화)
   _generated/       자동 생성. 직접 고치지 않음. GitHub에 같이 올림
 prompts/
   recommend.md      Stage 4 추천 프롬프트 초안 (입력·출력 JSON 형식 포함)
@@ -138,13 +145,15 @@ src/
     ZoneIcon.tsx    구역 아이콘 7개(24 격자, 선 두께 2)와 ZoneMark(핀 안 아이콘 + 코드 배지). 구역이 나오는 모든 곳에서 사용
     PhoneFrame.tsx  노트북용 휴대폰 프레임(상태바, 축소 맞춤), scrollAppToTop
     Connections.tsx Your people 줄, 위치 공개 범위 선택, Connect with friends(코드·링크 복사·코드 입력·연결 목록)
-    screens/        Welcome, Onboarding, ZonePicker, Explore(People/Map 전환),
+    screens/        Welcome, Onboarding(ProfileSetup·JoinEvent와 공통 입력칸), Events, EditProfile,
+                    ZonePicker, Explore(People/Map 전환),
                     Discover(Explore의 People), Zones(Explore의 Map, 구역 상세), PanelDetail,
                     MyRequests(Requests 탭), PanelNow(패널 Now 탭), Me(설정·지표·데모 컨트롤)
   lib/
     store.tsx       모든 상태와 동작. Convex 연결 지점
     types.ts        데이터 타입
-    mockData.ts     구역 목록, 관심사 목록, 예시 사람·요청, makeEvent(종료 시각 고정)
+    mockData.ts     EVENTS(행사 3개: 구역·예시 사람·예시 요청), 관심사 목록
+    links.ts        LinkedIn 주소 확인, 링크 href
     floorplan.ts    public/floorplan.png 위 구역 핀 좌표(원본 이미지 픽셀, 구역 코드 기준)와 구역별 아이콘 이름
     recommend.ts    규칙 기반 추천 (AI 실패 시 대체용)
     time.ts         시간 표시, 신선도 기준 15분, 떠나기 알림 기준 10분
@@ -154,13 +163,17 @@ src/
 
 | 함수 | 종류 | 하는 일 |
 |---|---|---|
-| `events.current` | query | 행사와 구역 |
-| `users.create` | mutation | 가입. 인상착의 1~6단어 검사 |
-| `users.update` | mutation | 구역, 인상착의, 공개 여부, 요청 일시정지 |
+| `profiles.create` / `update` | mutation | 프로필 만들기 / 고치기(모든 행사에 반영). LinkedIn은 linkedin.com 주소만 |
+| `profiles.get` / `participations` | query | 내 프로필 / 내가 들어간 행사와 역할 |
+| `profiles.claimFromParticipation` | mutation | 예전 브라우저의 참가 id로 프로필 찾기(없으면 만들기) |
+| `profiles.ensureCode` | mutation | 코드가 없는 프로필에 연결 코드 만들기 |
+| `events.list` / `get` | query | 행사 목록(가까운 순) / 행사 하나와 구역 |
+| `events.join` | mutation | 행사 참가(역할, 발표 제목, 인상착의, 지도 공개). 이미 있으면 그 참가 id |
+| `users.update` | mutation | 구역, 인상착의, 공개 범위, 요청 일시정지, 역할, 발표 제목. Speaker→Guest면 줄을 닫음 |
 | `users.setStatus` | mutation | 대화 가능/대화 중/떠남(`leavingInMin`). 떠남이면 예약 2개 생성 |
-| `users.listByEvent` | query | 행사 참가자 전체. `visible`을 보는 사람 기준으로 계산(모두 공개 또는 연결된 사람에게만 공개면 true), 안 보이면 구역을 지워서 반환. 연결 코드는 본인에게만 |
-| `connections.connectByCode` | mutation | 친구 코드 입력·초대 링크로 연결 (코드를 건넨 쪽이 동의한 것으로 봄) |
-| `connections.remove` / `ensureCode` / `demoFriends` | mutation | 연결 끊기 / 예전 계정에 코드 만들기 / 데모 친구 2명(Maya, Leo) 연결 |
+| `users.listByEvent` | query | 행사 참가자 전체에 프로필을 붙여서. `visible`은 보는 사람 기준(모두 공개, 또는 연결된 사람에게만 공개인데 내 프로필과 연결됨). 안 보이면 구역을 지워서 |
+| `connections.connectByCode` | mutation | 친구 코드 입력·초대 링크로 프로필끼리 연결 (코드를 건넨 쪽이 동의한 것으로 봄) |
+| `connections.remove` / `demoFriends` | mutation | 연결 끊기 / 데모 친구 2명(Maya, Leo) 연결 |
 | `connections.mine` | query | 내 연결 목록 (누가 연결했는지 `by` 포함) |
 | `chatRequests.create` | mutation | 요청. 중복·일시정지·떠난 패널 서버에서 차단 |
 | `chatRequests.setStatus` | mutation | 수락/거절/만남/취소/놓침. 누가 무엇을 바꿀 수 있는지 서버에서 검사 |
@@ -174,7 +187,7 @@ src/
 | `huddles.forAttendee` / `forPanel` | query | 내 Huddle(제안·완성·연결 질문 대기) / 패널 줄의 완성된 Huddle |
 | `activity.summary` | query | 행사 전체 활동 숫자 (Me 화면 Huddles formed, Connections made) |
 | `events.endEvent` | internal | 종료 시각에 모두의 구역·상태·떠나는 시간 삭제 |
-| `seed.ensure` / `seed.resetDemo` | mutation | 처음 채우기(기존 행사는 종료 시각·구역 이름만 맞춤) / 데모 초기화(빠진 예시 사람 추가, 실제 가입자는 건드리지 않음) |
+| `seed.ensure` / `seed.resetDemo` | mutation | 마이그레이션 실행 + EVENTS 행사 채우기·맞추기 / 지금 행사의 데모 초기화(실제 가입자는 건드리지 않음) |
 
 **예약 작업 설계**: 떠나는 시간이나 종료 시각이 바뀌면 새로 예약하고, 예전 예약은 실행될 때 값이 다르면 아무것도 하지 않는다. Convex 대시보드 → Schedules에서 볼 수 있다.
 
@@ -189,9 +202,9 @@ src/
 
 **Connections 설계**
 - `users.shareWith`(everyone/connections/nobody)와 기존 `visible`은 항상 같이 바뀐다. `visible`은 "모두에게 보임"이고, 서버 검사(요청 받기 등)는 지금처럼 `visible`을 쓴다.
-- `listByEvent`가 보는 사람(`viewerId`, View as 중이면 그 사람) 기준으로 `visible`을 다시 계산하므로, 화면은 지금처럼 `u.visible`만 보면 된다.
+- `listByEvent`가 보는 사람(`viewerId`, View as 중이면 그 사람)의 프로필 기준으로 `visible`을 다시 계산하므로, 화면은 지금처럼 `u.visible`만 보면 된다.
 - 초대 링크로 들어오면 `?connect=`를 localStorage(`spot.pendingConnect`)에 옮기고 주소에서 지운 뒤, 계정이 생기면 자동으로 연결한다.
-- `connections`는 방향마다 한 줄. `by`가 연결을 만든 사람이라 상대에게만 "… connected with you" 배너가 뜬다.
+- `profileConnections`는 방향마다 한 줄. `by`가 연결을 만든 프로필이라 상대에게만 "… connected with you" 배너가 뜬다. 예전 `connections` 표(참가 id끼리)는 마이그레이션이 옮기고 비웠다.
 
 **데이터 마이그레이션**: 구조를 바꾸면 `seed.ts`의 `runOnce(ctx, "이름", ...)`로 `seed.ensure` 안에 넣는다. 앱을 여는 순간 Development·Production 모두 한 번씩 실행되고 `migrations` 표에 기록돼 다시 돌지 않는다. 지운 필드는 스키마에 optional로 남겨 두고(주석 참고), 두 곳 모두 마이그레이션이 돈 뒤 스키마에서 지운다.
 
@@ -218,6 +231,7 @@ src/
 - [x] Huddle: 같은 줄 관심사 매칭, 함께 수락·만남, Open to huddles, 데모 버튼
 - [x] 팀 피드백 1: 구역 혼잡도, Huddle 후 "Stay connected?", Still here? 제거
 - [x] 팀 피드백 2: 하단 탭 정리(Explore 통합), 패널도 다른 패널에게 요청
+- [x] 팀 피드백 3: 여러 행사(예시 2개 추가), 행사별 역할(Speaker/Guest), 프로필(profiles) 분리, Edit profile, LinkedIn 칸
 - [x] Connections: 연결 코드·초대 링크, 위치 공개 범위(Everyone / Only my connections / No one), Your people, Zones 표시, 데모 버튼
 - [x] 구역 아이콘 통일: Pavilion 텐트, Atrium 기둥 홀, Breakouts 1–4 문 2개, Broadway 복도·화살표, Broadway 3 출입문, Breakouts 5–7 문 3개, Theater 무대·커튼
 - [x] 노트북용 휴대폰 화면 프레임 (라이트·다크, 낮은 화면 축소, 폰에서는 전체 화면)
@@ -370,6 +384,8 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - **Production과 Development는 데이터가 따로**다. 데모 주소에서 보이는 사람과 노트북에서 보이는 사람이 다른 게 정상.
 - **예시 사람은 Huddle에서 자동으로 Yes**: 실제 사용자가 낀 Huddle 제안에서 예시 사람은 버튼을 누를 수 없어 자동으로 Yes 처리된다. seed/Reset demo 직후에는 Dana의 줄에 Lena·Aisha(둘 다 Frontend) 제안이 있고 Aisha만 Yes 상태라, View as Lena로 바로 "Huddle up"을 보여줄 수 있다. Frontend 관심사로 가입해 Dana에게 요청하면 이 제안에 3번째로 합류한다.
 - **Leo는 "Only my connections" 공개**: 기본으로는 지도에 안 보이고, "Connect me with demo friends"를 누르면 Your people과 Theater에 나타난다 (연결 공개 시연용).
+- **예시 행사 2개**(Founders & Coffee SF, Bay Area Robotics Expo)는 앱을 처음 열 때 자동으로 생긴다. Reset demo는 **지금 보고 있는 행사**만 초기화한다.
+- **View as**: 지금 행사의 예시 Speaker·Guest 한 명씩(Cal Hacks는 Dana·Lena). Edit profile은 "You"로 볼 때만 나온다.
 - **새 예시 참석자 6명**(Maya, Omar, Jin, Sara, Leo, Nina)은 기존 DB에는 자동으로 안 들어간다. Production에서 Me → Demo controls → **Reset demo**를 한 번 눌러야 추가된다. Jin·Sara·Nina는 위치 숨김 상태다.
 - **예시 사람은 시간이 지나면 떠난다**: seed 직후 Priya는 8분 뒤, Ahmed는 25분 뒤 떠나도록 예약된다. 데모 전에 Me → Demo controls → **Reset demo**로 초기화.
 - **Vercel 배포가 "Blocked"**로 막히면 (무료 플랜 + Private 저장소 + 다른 사람 커밋) GitHub 저장소를 Public으로 바꾼다. 비밀값은 저장소에 없어서 안전하고, Devpost 제출 때도 공개가 필요하다.
@@ -390,6 +406,7 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 | 네이티브 앱 대신 웹앱 + PWA | 윈도우로 아이폰 빌드 불가, 앱스토어 심사 불가. PWA로 앱처럼 보임 |
 | Meta API, Cartesia 안 씀 | 이 제품에 자연스럽게 필요하지 않음 |
 | 로그인 없음 (localStorage) | 해커톤 범위. 가입 마찰 최소화 |
+| 프로필(계정)과 행사 참가를 분리 | 같은 사람이 행사마다 Speaker/Guest가 다르고, 인상착의는 그날만 유효. 요청·Huddle은 참가 id 그대로라 변경 최소 |
 | Next.js + Convex + Vercel | 실시간 반영이 핵심이라 Convex. push만 하면 자동 배포 |
 
 **심사 예상 질문**
@@ -417,3 +434,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/24 00:04 노트북용 휴대폰 화면 프레임 (탭바·알림·스크롤이 프레임 안에서 동작)
 - 10/24 07:16 팀 피드백 1: 혼잡도·Stay connected·Still here 제거, 한 번만 도는 마이그레이션 장치(runOnce) 추가
 - 10/24 07:21 팀 피드백 2: 탭 정리(게스트 Explore/Requests/Me, 패널 Now 추가), Explore에 People/Map 전환, Huddle은 Requests로, 패널끼리 요청 가능
+- 10/24 07:43 팀 피드백 3: profiles 분리·여러 행사·행사별 역할·Edit profile·LinkedIn, 마이그레이션 profiles-and-events-v1, 예시 행사 2개

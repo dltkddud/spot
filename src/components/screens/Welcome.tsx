@@ -40,8 +40,8 @@ export function Welcome() {
       </div>
 
       <div className="mt-auto pt-10">
-        <Button block icon="arrow" onClick={() => navigate({ name: "onboarding" })}>
-          Join the event
+        <Button block icon="arrow" onClick={() => navigate({ name: "profileSetup" })}>
+          Get started
         </Button>
         <p className="mt-4 text-center text-xs leading-relaxed text-muted">
           Only your zone is shared, never your exact location.

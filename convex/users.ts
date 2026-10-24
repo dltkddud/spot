@@ -1,11 +1,11 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { OUTFIT_WORD_LIMIT } from "../src/lib/mockData";
-import { scheduleLeaving } from "./leaving";
-import { proposeFor } from "./huddles";
-import { newConnectCode } from "./connections";
+import { closeLine, scheduleLeaving } from "./leaving";
 import type { Doc, Id } from "./_generated/dataModel";
-import schema from "./schema";
+
+// users holds one person's part in one event (role, outfit, zone, status).
+// Who they are lives in their profile; listByEvent joins the two.
 
 const MIN = 60_000;
 
@@ -15,7 +15,7 @@ export function shareWithOf(u: Doc<"users">) {
   return u.shareWith ?? (u.visible ? "everyone" : "nobody");
 }
 
-function cleanOutfit(outfit: string) {
+export function cleanOutfit(outfit: string) {
   const trimmed = outfit.trim();
   const words = trimmed ? trimmed.split(/\s+/).length : 0;
   if (words === 0 || words > OUTFIT_WORD_LIMIT) {
@@ -24,39 +24,8 @@ function cleanOutfit(outfit: string) {
   return trimmed;
 }
 
-export const create = mutation({
-  args: {
-    eventId: v.id("events"),
-    name: v.string(),
-    role: v.union(v.literal("panel"), v.literal("attendee")),
-    headline: v.string(),
-    talkTitle: v.optional(v.string()),
-    interests: v.array(v.string()),
-    outfit: v.string(),
-    contactUrl: v.optional(v.string()),
-    visible: v.boolean(),
-  },
-  returns: v.id("users"),
-  handler: async (ctx, args) => {
-    const name = args.name.trim();
-    if (!name) throw new ConvexError("Name is required.");
-    return await ctx.db.insert("users", {
-      ...args,
-      name,
-      headline: args.headline.trim(),
-      talkTitle: args.talkTitle?.trim() || undefined,
-      contactUrl: args.contactUrl?.trim() || undefined,
-      outfit: cleanOutfit(args.outfit),
-      status: "available",
-      requestsPaused: false,
-      shareWith: args.visible ? "everyone" : "nobody",
-      connectCode: await newConnectCode(ctx),
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-// Zone, outfit, visibility, request pause and huddles. Only the fields passed are changed.
+// My part in this event: zone, outfit, who sees me, request pause, role and
+// talk title. Only the fields passed are changed.
 export const update = mutation({
   args: {
     id: v.id("users"),
@@ -65,16 +34,22 @@ export const update = mutation({
     visible: v.optional(v.boolean()),
     shareWith: v.optional(shareWithValidator),
     requestsPaused: v.optional(v.boolean()),
-    openToHuddles: v.optional(v.boolean()),
+    role: v.optional(v.union(v.literal("panel"), v.literal("attendee"))),
+    // Empty clears it.
+    talkTitle: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (ctx, { id, zoneId, outfit, visible, shareWith, requestsPaused, openToHuddles }) => {
+  handler: async (ctx, { id, zoneId, outfit, visible, shareWith, requestsPaused, role, talkTitle }) => {
     const user = await ctx.db.get("users", id);
     if (!user) throw new ConvexError("User not found.");
     if (zoneId) {
       const zone = await ctx.db.get("zones", zoneId);
       if (!zone || zone.eventId !== user.eventId) throw new ConvexError("Zone not found.");
     }
+    // A speaker becoming a guest: their line closes as if they'd left.
+    const stopsSpeaking = role === "attendee" && user.role === "panel";
+    if (stopsSpeaking) await closeLine(ctx, id);
+
     await ctx.db.patch("users", id, {
       ...(zoneId !== undefined && { zoneId }),
       ...(outfit !== undefined && { outfit: cleanOutfit(outfit) }),
@@ -82,17 +57,11 @@ export const update = mutation({
       ...(shareWith !== undefined && { shareWith, visible: shareWith === "everyone" }),
       ...(shareWith === undefined && visible !== undefined && { visible, shareWith: visible ? "everyone" : "nobody" }),
       ...(requestsPaused !== undefined && { requestsPaused }),
-      ...(openToHuddles !== undefined && { openToHuddles }),
+      ...(role !== undefined && { role }),
+      ...(talkTitle !== undefined && { talkTitle: talkTitle.trim() || undefined }),
+      ...(stopsSpeaking && { status: "available" as const, leavingAt: undefined, requestsPaused: false }),
       updatedAt: Date.now(),
     });
-    // Turning huddles back on: look for matches in every line I'm waiting in.
-    if (openToHuddles && user.openToHuddles === false) {
-      const mine = await ctx.db
-        .query("chatRequests")
-        .withIndex("by_attendee", (q) => q.eq("attendeeId", id))
-        .take(200);
-      for (const r of mine) if (r.status === "waiting") await proposeFor(ctx, r.panelId);
-    }
     return null;
   },
 });
@@ -124,20 +93,46 @@ export const setStatus = mutation({
   },
 });
 
-// Everyone at the event, as the viewer is allowed to see them. visible is
-// worked out per viewer: true if they share with everyone, or with their
-// connections and the viewer is one. Anyone not visible keeps their profile
-// but not their zone. Only the viewer gets their own connect code.
+const personValidator = v.object({
+  _id: v.id("users"),
+  _creationTime: v.number(),
+  eventId: v.id("events"),
+  profileId: v.id("profiles"),
+  role: v.union(v.literal("panel"), v.literal("attendee")),
+  talkTitle: v.optional(v.string()),
+  outfit: v.string(),
+  zoneId: v.optional(v.id("zones")),
+  status: v.union(v.literal("available"), v.literal("talking"), v.literal("leaving")),
+  leavingAt: v.optional(v.number()),
+  visible: v.boolean(),
+  shareWith: v.optional(shareWithValidator),
+  requestsPaused: v.boolean(),
+  updatedAt: v.number(),
+  seedKey: v.optional(v.string()),
+  // From the profile.
+  name: v.string(),
+  headline: v.string(),
+  interests: v.array(v.string()),
+  linkedinUrl: v.optional(v.string()),
+  contactUrl: v.optional(v.string()),
+  openToHuddles: v.optional(v.boolean()),
+});
+
+// Everyone at the event, as the viewer is allowed to see them, with their
+// profile filled in. visible is worked out per viewer: true if they share with
+// everyone, or with their connections and the viewer's profile is one. Anyone
+// not visible keeps their profile but not their zone.
 export const listByEvent = query({
   args: { eventId: v.id("events"), viewerId: v.optional(v.string()) },
-  returns: v.array(schema.doc("users")),
+  returns: v.array(personValidator),
   handler: async (ctx, { eventId, viewerId }) => {
-    const viewer = viewerId ? ctx.db.normalizeId("users", viewerId) : null;
-    const connected = new Set<Id<"users">>();
-    if (viewer) {
+    const viewerUserId = viewerId ? ctx.db.normalizeId("users", viewerId) : null;
+    const viewer = viewerUserId ? await ctx.db.get("users", viewerUserId) : null;
+    const connected = new Set<Id<"profiles">>();
+    if (viewer?.profileId) {
       const links = await ctx.db
-        .query("connections")
-        .withIndex("by_user_and_other", (q) => q.eq("userId", viewer))
+        .query("profileConnections")
+        .withIndex("by_profile_and_other", (q) => q.eq("profileId", viewer.profileId!))
         .take(500);
       links.forEach((l) => connected.add(l.otherId));
     }
@@ -145,11 +140,39 @@ export const listByEvent = query({
       .query("users")
       .withIndex("by_event", (q) => q.eq("eventId", eventId))
       .take(1000);
-    return users.map(({ connectCode, ...u }) => {
-      if (u._id === viewer) return { ...u, connectCode };
-      const share = shareWithOf({ ...u, connectCode });
-      const seen = share === "everyone" || (share === "connections" && connected.has(u._id));
-      return seen ? { ...u, visible: true } : { ...u, visible: false, zoneId: undefined };
-    });
+
+    const out = [];
+    for (const u of users) {
+      if (!u.profileId) continue; // not migrated yet
+      const profile = await ctx.db.get("profiles", u.profileId);
+      if (!profile) continue;
+      const share = shareWithOf(u);
+      const seen = u._id === viewer?._id || share === "everyone" || (share === "connections" && connected.has(u.profileId));
+      out.push({
+        _id: u._id,
+        _creationTime: u._creationTime,
+        eventId: u.eventId,
+        profileId: u.profileId,
+        role: u.role,
+        talkTitle: u.talkTitle,
+        outfit: u.outfit,
+        zoneId: seen ? u.zoneId : undefined,
+        status: u.status,
+        leavingAt: u.leavingAt,
+        // My own row keeps my real setting; everyone else's says whether I can see them.
+        visible: u._id === viewer?._id ? u.visible : seen,
+        shareWith: u.shareWith,
+        requestsPaused: u.requestsPaused,
+        updatedAt: u.updatedAt,
+        seedKey: u.seedKey,
+        name: profile.name,
+        headline: profile.headline,
+        interests: profile.interests,
+        linkedinUrl: profile.linkedinUrl,
+        contactUrl: profile.contactUrl,
+        openToHuddles: profile.openToHuddles,
+      });
+    }
+    return out;
   },
 });

@@ -86,7 +86,7 @@ export function FloorPlan({ zones, selectedId, myZoneId, onSelect, focusId }: Pr
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                {iconFor(z.code)}
+                {iconFor(z)}
               </g>
               <circle cx="21" cy="3.5" r="5" fill="var(--ink)" stroke="var(--surface)" strokeWidth="1.2" />
               <text x="21" y="5.8" textAnchor="middle" fontSize="6.6" fontWeight="900" fill="var(--surface)">

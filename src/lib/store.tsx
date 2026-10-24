@@ -23,54 +23,78 @@ import type {
   ChatRequest,
   Connection,
   Huddle,
+  Participation,
+  Profile,
   RequestStatus,
   EventInfo,
   Role,
+  ShareWith,
   Status,
   Toast,
   User,
   Zone,
 } from "./types";
 
-const MY_ID_KEY = "spot.myUserId";
+const PROFILE_KEY = "spot.profileId";
+const EVENT_KEY = "spot.eventId";
+// Before profiles, the browser remembered a participation id here.
+const LEGACY_USER_KEY = "spot.myUserId";
 const PENDING_CONNECT_KEY = "spot.pendingConnect";
 
 export type Screen =
   | { name: "welcome" }
-  | { name: "onboarding" }
+  | { name: "profileSetup" }
+  | { name: "events" }
+  | { name: "joinEvent"; eventId: string }
   | { name: "zonePicker"; fromOnboarding?: boolean }
   | { name: "explore"; view?: ExploreView }
   | { name: "zoneDetail"; zoneId: string }
   | { name: "panelDetail"; panelId: string }
   | { name: "requests" }
   | { name: "panelNow" }
-  | { name: "me" };
+  | { name: "me" }
+  | { name: "editProfile" };
 
 export type ExploreView = "people" | "map";
 
+// The profile shared by every event.
 export type ProfileInput = {
   name: string;
-  role: Role;
   headline: string;
-  talkTitle?: string;
   interests: string[];
-  outfit: string;
+  linkedinUrl?: string;
   contactUrl?: string;
+};
+
+// How I'm at one event.
+export type JoinInput = {
+  role: Role;
+  talkTitle?: string;
+  outfit: string;
   visible: boolean;
 };
 
-// Kept in the browser. Event, zones, users and chat requests come from Convex.
+// Kept in the browser. Events, people and chat requests come from Convex.
 type LocalState = {
   now: number;
   activity: Activity[];
   toasts: Toast[];
-  currentUserId: string | null;
-  myUserId: string | null;
+  profileId: string | null;
+  // The event I'm looking at.
+  eventId: string | null;
+  // Demo: looking at the app as someone else at this event.
+  viewAsId: string | null;
   stack: Screen[];
   booted: boolean;
 };
 
 type State = LocalState & {
+  // My participation at this event, and whoever I'm viewing as (usually the same).
+  myUserId: string | null;
+  currentUserId: string | null;
+  profile: Profile | null;
+  events: EventInfo[];
+  participations: Participation[];
   event: EventInfo;
   zones: Zone[];
   users: User[];
@@ -79,7 +103,7 @@ type State = LocalState & {
   huddles: Huddle[];
   // Event-wide counts kept on the server (huddles formed, connections made).
   stats: Record<string, number>;
-  // People I'm connected with (they see my zone when I share with connections).
+  // Profiles I'm connected with (they see my zone when I share with connections).
   connections: Connection[];
 };
 
@@ -87,15 +111,18 @@ type Action =
   | { type: "navigate"; screen: Screen; replace?: boolean }
   | { type: "back" }
   | { type: "resetTo"; screen: Screen }
-  | { type: "completeOnboarding"; profile: ProfileInput }
-  | { type: "updateMe"; patch: Partial<User> }
+  | { type: "createProfile"; profile: ProfileInput }
+  | { type: "enterEvent"; eventId: string }
+  | { type: "joinEvent"; eventId: string; join: JoinInput }
+  | { type: "saveProfile"; profile: ProfileInput; here: { role: Role; talkTitle?: string; outfit: string } }
+  | { type: "updateMe"; patch: { zoneId?: string; outfit?: string; shareWith?: ShareWith; requestsPaused?: boolean; openToHuddles?: boolean } }
   | { type: "setStatus"; status: Exclude<Status, "leaving"> }
   | { type: "setLeaving"; minutes: number }
   | { type: "huddleRespond"; huddleId: string; accept: boolean }
   | { type: "setHuddleStatus"; huddleId: string; status: "accepted" | "declined" | "met" | "missed" }
   | { type: "simulateHuddle" }
   | { type: "connectCode"; code: string }
-  | { type: "removeConnection"; userId: string }
+  | { type: "removeConnection"; profileId: string }
   | { type: "simulateFriends" }
   | { type: "requestChat"; panelId: string; note: string }
   | { type: "setRequestStatus"; requestId: string; status: ChatRequest["status"] }
@@ -108,37 +135,36 @@ type Action =
   | { type: "reset"; now: number };
 
 type LocalAction =
-  | Extract<
-      Action,
-      { type: "navigate" | "back" | "resetTo" | "log" | "toast" | "dismissToast" }
-    >
+  | Extract<Action, { type: "navigate" | "back" | "resetTo" | "toast" | "dismissToast" }>
+  | { type: "log"; activityType: ActivityType; targetId?: string; userId: string }
   | { type: "tick"; now: number }
-  | { type: "boot"; myUserId: string | null; role?: Role }
-  | { type: "signedIn"; userId: string }
-  | { type: "viewAs"; userId: string; role: Role }
-  | { type: "reset"; now: number; role?: Role };
+  | { type: "boot"; profileId: string | null; eventId: string; stack: Screen[] }
+  | { type: "setProfile"; profileId: string }
+  | { type: "setEvent"; eventId: string; stack: Screen[] }
+  | { type: "viewAs"; userId: string | null; role: Role }
+  | { type: "reset"; now: number; stack: Screen[] };
 
 let idCounter = 0;
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(idCounter++).toString(36)}`;
 
-function loadMyId(): string | null {
+function load(key: string): string | null {
   try {
-    return localStorage.getItem(MY_ID_KEY);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-function saveMyId(id: string | null) {
+function save(key: string, value: string | null) {
   try {
-    if (id) localStorage.setItem(MY_ID_KEY, id);
-    else localStorage.removeItem(MY_ID_KEY);
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
   } catch {
-    // Storage blocked (private mode etc.). The account just won't survive a reload.
+    // Storage blocked (private mode etc.). The profile just won't survive a reload.
   }
 }
 
-// An invite link (?connect=CODE) is remembered until there's an account to connect.
+// An invite link (?connect=CODE) is remembered until there's a profile to connect.
 function takeInviteFromUrl() {
   try {
     const url = new URL(window.location.href);
@@ -162,13 +188,14 @@ function takePendingInvite(): string | null {
   }
 }
 
-function initialState(now: number, myUserId: string | null): LocalState {
+function initialState(now: number): LocalState {
   return {
     now,
     activity: [],
     toasts: [],
-    currentUserId: null,
-    myUserId,
+    profileId: load(PROFILE_KEY),
+    eventId: load(EVENT_KEY),
+    viewAsId: null,
     stack: [{ name: "welcome" }],
     booted: false,
   };
@@ -183,8 +210,6 @@ function addToast(state: LocalState, message: string): LocalState {
 }
 
 function reducer(state: LocalState, action: LocalAction): LocalState {
-  const meId = state.currentUserId;
-
   switch (action.type) {
     case "tick":
       return { ...state, now: action.now };
@@ -201,29 +226,20 @@ function reducer(state: LocalState, action: LocalAction): LocalState {
       return { ...state, stack: [action.screen] };
 
     case "boot":
-      return {
-        ...state,
-        booted: true,
-        myUserId: action.myUserId,
-        currentUserId: action.myUserId,
-        stack: action.role ? [homeFor(action.role)] : state.stack,
-      };
+      return { ...state, booted: true, profileId: action.profileId, eventId: action.eventId, stack: action.stack };
 
-    case "signedIn":
-      return {
-        ...state,
-        currentUserId: action.userId,
-        myUserId: action.userId,
-        stack: [{ name: "zonePicker", fromOnboarding: true }],
-      };
+    case "setProfile":
+      return { ...state, profileId: action.profileId, stack: [{ name: "events" }] };
+
+    case "setEvent":
+      return { ...state, eventId: action.eventId, viewAsId: null, stack: action.stack };
 
     case "log":
-      if (!meId) return state;
       return {
         ...state,
         activity: [
           ...state.activity,
-          { id: newId("act"), type: action.activityType, userId: meId, targetId: action.targetId, createdAt: state.now },
+          { id: newId("act"), type: action.activityType, userId: action.userId, targetId: action.targetId, createdAt: state.now },
         ],
       };
 
@@ -234,15 +250,10 @@ function reducer(state: LocalState, action: LocalAction): LocalState {
       return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) };
 
     case "viewAs":
-      return { ...state, currentUserId: action.userId, stack: [homeFor(action.role)] };
+      return { ...state, viewAsId: action.userId, stack: [homeFor(action.role)] };
 
     case "reset":
-      return {
-        ...initialState(action.now, state.myUserId),
-        booted: true,
-        currentUserId: state.myUserId,
-        stack: action.role ? [homeFor(action.role)] : [{ name: "welcome" }],
-      };
+      return { ...state, activity: [], toasts: [], viewAsId: null, now: action.now, stack: action.stack };
   }
 }
 
@@ -270,17 +281,20 @@ type AppContextValue = {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [local, localDispatch] = useReducer(reducer, 0, () => initialState(Date.now(), loadMyId()));
+  const [local, localDispatch] = useReducer(reducer, 0, () => initialState(Date.now()));
 
   const ensureSeed = useMutation(api.seed.ensure);
   const resetDemo = useMutation(api.seed.resetDemo);
-  const createUser = useMutation(api.users.create);
+  const createProfile = useMutation(api.profiles.create);
+  const updateProfile = useMutation(api.profiles.update);
+  const claimLegacy = useMutation(api.profiles.claimFromParticipation);
+  const ensureCode = useMutation(api.profiles.ensureCode);
+  const joinEvent = useMutation(api.events.join);
   const updateUser = useMutation(api.users.update);
   const setUserStatus = useMutation(api.users.setStatus);
   const huddleRespond = useMutation(api.huddles.respond);
   const setHuddleStatus = useMutation(api.huddles.setGroupStatus);
   const demoHuddle = useMutation(api.huddles.demoPropose);
-  const ensureCode = useMutation(api.connections.ensureCode);
   const connectByCode = useMutation(api.connections.connectByCode);
   const removeConnection = useMutation(api.connections.remove);
   const demoFriends = useMutation(api.connections.demoFriends);
@@ -292,49 +306,103 @@ export function AppProvider({ children }: { children: ReactNode }) {
     takeInviteFromUrl();
   }, [ensureSeed]);
 
-  const current = useLatest(useQuery(api.events.current));
-  const eventId = current?.event._id;
+  // Browsers from before profiles remember a participation id: carry it over.
+  const [claiming, setClaiming] = useState(() => !local.profileId && !!load(LEGACY_USER_KEY));
+  const [claimedProfileId, setClaimedProfileId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!claiming) return;
+    claimLegacy({ userId: load(LEGACY_USER_KEY) ?? "" })
+      .then((profileId) => {
+        if (profileId) save(PROFILE_KEY, profileId);
+        save(LEGACY_USER_KEY, null);
+        setClaimedProfileId(profileId);
+      })
+      .catch(() => {})
+      .finally(() => setClaiming(false));
+  }, [claiming, claimLegacy]);
+  const profileId = local.profileId ?? claimedProfileId;
+
+  const eventsRaw = useLatest(useQuery(api.events.list));
+  const profileRaw = useLatest(useQuery(api.profiles.get, profileId ? { profileId } : "skip"));
+  const partsRaw = useLatest(useQuery(api.profiles.participations, profileId ? { profileId } : "skip"));
+
+  const events = useMemo<EventInfo[]>(
+    () =>
+      (eventsRaw ?? []).map(({ _id, name, venue, startsAt, endsAt, floorPlan }) => ({
+        id: _id,
+        name,
+        venue,
+        startsAt,
+        endsAt,
+        floorPlan,
+      })),
+    [eventsRaw],
+  );
+  // The event I picked last, or the first one (Cal Hacks) if I haven't picked.
+  const eventId = local.eventId && events.some((e) => e.id === local.eventId) ? local.eventId : (events[0]?.id ?? null);
+
+  const profile = useMemo<Profile | null>(
+    () => (profileRaw ? { ...profileRaw, id: profileRaw._id } : null),
+    [profileRaw],
+  );
+  const participations = useMemo<Participation[]>(
+    () => (partsRaw ?? []).map(({ eventId, userId, role }) => ({ eventId, userId, role })),
+    [partsRaw],
+  );
+  const myUserId = participations.find((p) => p.eventId === eventId)?.userId ?? null;
+  const currentUserId = local.viewAsId ?? myUserId;
+
+  const current = useLatest(useQuery(api.events.get, eventId ? { eventId } : "skip"));
   const rawUsers = useLatest(
-    useQuery(
-      api.users.listByEvent,
-      eventId ? { eventId, viewerId: (local.booted ? local.currentUserId : local.myUserId) ?? undefined } : "skip",
-    ),
+    useQuery(api.users.listByEvent, eventId ? { eventId: eventId as Id<"events">, viewerId: currentUserId ?? undefined } : "skip"),
   );
 
-  const viewerId = local.booted ? (local.currentUserId as Id<"users"> | null) : null;
-  const openLines = useLatest(useQuery(api.chatRequests.activeByEvent, eventId ? { eventId } : "skip"));
+  const viewerId = local.booted ? (currentUserId as Id<"users"> | null) : null;
+  const openLines = useLatest(
+    useQuery(api.chatRequests.activeByEvent, eventId ? { eventId: eventId as Id<"events"> } : "skip"),
+  );
   const myLine = useLatest(useQuery(api.chatRequests.forPanel, viewerId ? { panelId: viewerId } : "skip"));
   const mySent = useLatest(useQuery(api.chatRequests.forAttendee, viewerId ? { attendeeId: viewerId } : "skip"));
   const myHuddles = useLatest(useQuery(api.huddles.forAttendee, viewerId ? { attendeeId: viewerId } : "skip"));
   const lineHuddles = useLatest(useQuery(api.huddles.forPanel, viewerId ? { panelId: viewerId } : "skip"));
-  const summary = useLatest(useQuery(api.activity.summary, eventId ? { eventId } : "skip"));
-  const myLinks = useLatest(useQuery(api.connections.mine, viewerId ? { userId: viewerId } : "skip"));
-  const connections = useMemo<Connection[]>(
-    () => (myLinks ?? []).map(({ otherId, source, createdAt }) => ({ userId: otherId, source, createdAt })),
-    [myLinks],
-  );
+  const summary = useLatest(useQuery(api.activity.summary, eventId ? { eventId: eventId as Id<"events"> } : "skip"));
+  const myLinks = useLatest(useQuery(api.connections.mine, profileId ? { profileId } : "skip"));
   const stats = useMemo(() => summary ?? {}, [summary]);
 
+  // While switching events the previous event's data is still showing; treat it as loading.
   const event = useMemo<EventInfo | undefined>(
-    () =>
-      current
-        ? {
-            id: current.event._id,
-            name: current.event.name,
-            venue: current.event.venue,
-            endsAt: current.event.endsAt,
-          }
-        : undefined,
-    [current],
+    () => (current && current.event._id === eventId ? events.find((e) => e.id === eventId) : undefined),
+    [current, eventId, events],
   );
   const zones = useMemo<Zone[]>(
-    () => (current?.zones ?? []).map((z) => ({ id: z._id, code: z.code, name: z.name, landmark: z.landmark })),
-    [current],
+    () =>
+      (current?.event._id === eventId ? current.zones : []).map((z) => ({
+        id: z._id,
+        code: z.code,
+        name: z.name,
+        landmark: z.landmark,
+        icon: z.icon,
+      })),
+    [current, eventId],
   );
   const users = useMemo<User[] | undefined>(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    () => rawUsers?.map(({ _id, _creationTime, eventId, ...u }) => ({ id: _id, ...u })),
-    [rawUsers],
+    () =>
+      rawUsers && rawUsers.every((u) => u.eventId === eventId)
+        ? // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          rawUsers.map(({ _id, _creationTime, eventId, ...u }) => ({ id: _id, ...u }))
+        : undefined,
+    [rawUsers, eventId],
+  );
+  const connections = useMemo<Connection[]>(
+    () =>
+      (myLinks ?? []).map(({ otherId, name, source, createdAt }) => ({
+        profileId: otherId,
+        name,
+        userId: users?.find((u) => u.profileId === otherId)?.id,
+        source,
+        createdAt,
+      })),
+    [myLinks, users],
   );
 
   // Open lines from everyone (no names or notes), overlaid with the full rows
@@ -376,17 +444,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return [...byId.values()];
   }, [lineHuddles, myHuddles]);
 
-  // Restore my account from localStorage once users have loaded.
+  // First screen once everything I need has loaded: Welcome without a profile,
+  // my home at the event I picked last, or the Events list.
+  const profileLoaded = !profileId || (profileRaw !== undefined && partsRaw !== undefined);
   useEffect(() => {
-    if (!users || local.booted) return;
-    const mine = local.myUserId ? users.find((u) => u.id === local.myUserId) : undefined;
-    if (local.myUserId && !mine) saveMyId(null);
-    localDispatch({ type: "boot", myUserId: mine?.id ?? null, role: mine?.role });
-  }, [users, local.booted, local.myUserId]);
+    if (local.booted || claiming || !eventsRaw || !eventId || !profileLoaded) return;
+    const known = profileId && profile ? profileId : null;
+    if (profileId && !known) save(PROFILE_KEY, null);
+    const mine = known ? participations.find((p) => p.eventId === eventId) : undefined;
+    const stack: Screen[] = !known ? [{ name: "welcome" }] : mine ? [homeFor(mine.role)] : [{ name: "events" }];
+    localDispatch({ type: "boot", profileId: known, eventId, stack });
+  }, [local.booted, claiming, eventsRaw, eventId, profileLoaded, profileId, profile, participations]);
 
-  const latest = useRef({ local, users: users ?? [], zones, event, requests });
+  const latest = useRef({ local, users: users ?? [], zones, event, requests, myUserId, currentUserId, participations, profileId });
   useEffect(() => {
-    latest.current = { local, users: users ?? [], zones, event, requests };
+    latest.current = { local, users: users ?? [], zones, event, requests, myUserId, currentUserId, participations, profileId };
   });
 
   // Keeps "3 min ago" and countdowns fresh. Leaving itself runs on the server.
@@ -467,69 +539,115 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [viewerId, users, myHuddles]);
 
   // Banner when someone connects with me. Connections I made get their banner from the action.
-  const seenLinks = useRef<{ viewerId: string; ids: Set<string>; loaded: boolean } | null>(null);
+  const seenLinks = useRef<{ profileId: string; ids: Set<string>; loaded: boolean } | null>(null);
   useEffect(() => {
-    if (!viewerId || !users || !myLinks) return;
-    if (seenLinks.current?.viewerId !== viewerId) seenLinks.current = { viewerId, ids: new Set(), loaded: false };
+    if (!profileId || !myLinks) return;
+    if (seenLinks.current?.profileId !== profileId) seenLinks.current = { profileId, ids: new Set(), loaded: false };
     const seen = seenLinks.current;
     for (const link of myLinks) {
       if (seen.ids.has(link.otherId)) continue;
       seen.ids.add(link.otherId);
-      if (!seen.loaded || (link.source !== "huddle" && link.by === viewerId)) continue;
-      const name = users.find((u) => u.id === link.otherId)?.name.split(" ")[0] ?? "Someone";
+      if (!seen.loaded || (link.source !== "huddle" && link.by === profileId)) continue;
+      const name = link.name.split(" ")[0];
       localDispatch({
         type: "toast",
         message: link.source === "huddle" ? `You and ${name} are now connected.` : `${name} connected with you.`,
       });
     }
     seen.loaded = true;
-  }, [viewerId, users, myLinks]);
+  }, [profileId, myLinks]);
 
-  // Accounts made before connect codes existed get one when they open the app.
-  const me = users?.find((u) => u.id === local.currentUserId);
-  const needsCode = !!me && !me.connectCode;
+  // Profiles made before connect codes existed get one when they open the app.
+  const needsCode = !!profile && !profile.connectCode;
   useEffect(() => {
-    if (needsCode && viewerId) ensureCode({ userId: viewerId }).catch(() => {});
-  }, [needsCode, viewerId, ensureCode]);
+    if (needsCode && profileId) ensureCode({ profileId: profileId as Id<"profiles"> }).catch(() => {});
+  }, [needsCode, profileId, ensureCode]);
 
-  const creating = useRef(false);
+  const busy = useRef(false);
 
   const dispatch = useCallback<Dispatch<Action>>(
     (action) => {
-      const { local, users, event, requests } = latest.current;
-      const meId = local.currentUserId as Id<"users"> | null;
+      const { local, users, event, requests, myUserId, currentUserId, participations, profileId } = latest.current;
+      const meId = currentUserId as Id<"users"> | null;
       const run = (p: Promise<unknown>) =>
         p.catch((e) => localDispatch({ type: "toast", message: errorMessage(e) }));
+      // Only one sign-up step at a time, so a double tap doesn't make two.
+      const once = (p: () => Promise<unknown>) => {
+        if (busy.current) return;
+        busy.current = true;
+        run(p()).finally(() => {
+          busy.current = false;
+        });
+      };
+      const at = event && myUserId ? { eventId: event.id as Id<"events">, userId: myUserId as Id<"users"> } : {};
 
       switch (action.type) {
-        case "completeOnboarding": {
-          if (!event || creating.current) return;
-          creating.current = true;
-          run(
-            createUser({ eventId: event.id as Id<"events">, ...action.profile }).then((id) => {
-              saveMyId(id);
-              localDispatch({ type: "signedIn", userId: id });
+        case "createProfile":
+          once(() =>
+            createProfile(action.profile).then((id) => {
+              save(PROFILE_KEY, id);
+              localDispatch({ type: "setProfile", profileId: id });
             }),
-          ).finally(() => {
-            creating.current = false;
+          );
+          return;
+
+        case "enterEvent": {
+          const mine = participations.find((p) => p.eventId === action.eventId);
+          save(EVENT_KEY, action.eventId);
+          localDispatch({
+            type: "setEvent",
+            eventId: action.eventId,
+            stack: mine ? [homeFor(mine.role)] : [{ name: "events" }, { name: "joinEvent", eventId: action.eventId }],
           });
+          return;
+        }
+
+        case "joinEvent":
+          if (!profileId) return;
+          once(() =>
+            joinEvent({
+              eventId: action.eventId as Id<"events">,
+              profileId: profileId as Id<"profiles">,
+              ...action.join,
+            }).then(() => {
+              save(EVENT_KEY, action.eventId);
+              localDispatch({ type: "setEvent", eventId: action.eventId, stack: [{ name: "zonePicker", fromOnboarding: true }] });
+            }),
+          );
+          return;
+
+        case "saveProfile": {
+          if (!profileId) return;
+          const { profile, here } = action;
+          once(() =>
+            Promise.all([
+              updateProfile({
+                profileId: profileId as Id<"profiles">,
+                ...profile,
+                // Empty strings clear a link.
+                linkedinUrl: profile.linkedinUrl ?? "",
+                contactUrl: profile.contactUrl ?? "",
+              }),
+              myUserId &&
+                updateUser({ id: myUserId as Id<"users">, role: here.role, talkTitle: here.talkTitle ?? "", outfit: here.outfit }),
+            ]).then(() => {
+              localDispatch({ type: "toast", message: "Profile saved." });
+              localDispatch({ type: "resetTo", screen: { name: "me" } });
+            }),
+          );
           return;
         }
 
         case "updateMe": {
           if (!meId) return;
-          const { zoneId, outfit, visible, shareWith, requestsPaused, openToHuddles } = action.patch;
-          run(
-            updateUser({
-              id: meId,
-              zoneId: zoneId as Id<"zones"> | undefined,
-              outfit,
-              visible,
-              shareWith,
-              requestsPaused,
-              openToHuddles,
-            }),
-          );
+          const { zoneId, outfit, shareWith, requestsPaused, openToHuddles } = action.patch;
+          if (openToHuddles !== undefined) {
+            const viewed = users.find((u) => u.id === meId);
+            if (viewed) run(updateProfile({ profileId: viewed.profileId as Id<"profiles">, openToHuddles }));
+          }
+          if (zoneId !== undefined || outfit !== undefined || shareWith !== undefined || requestsPaused !== undefined) {
+            run(updateUser({ id: meId, zoneId: zoneId as Id<"zones"> | undefined, outfit, shareWith, requestsPaused }));
+          }
           return;
         }
 
@@ -552,7 +670,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           run(
             setHuddleStatus({ huddleId: action.huddleId as Id<"huddles">, actorId: meId, status: action.status }).then(
               () => {
-                if (activityType) localDispatch({ type: "log", activityType, targetId: meId });
+                if (activityType) localDispatch({ type: "log", activityType, targetId: meId, userId: meId });
               },
             ),
           );
@@ -564,9 +682,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
 
         case "connectCode":
-          if (!meId) return;
+          if (!profileId) return;
           run(
-            connectByCode({ userId: meId, code: action.code }).then(({ name, isNew }) => {
+            connectByCode({ profileId: profileId as Id<"profiles">, code: action.code, ...at }).then(({ name, isNew }) => {
               localDispatch({
                 type: "toast",
                 message: isNew ? `You're connected with ${name}.` : `You're already connected with ${name}.`,
@@ -576,24 +694,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
 
         case "removeConnection":
-          if (meId) run(removeConnection({ userId: meId, otherId: action.userId as Id<"users"> }));
+          if (profileId) {
+            run(removeConnection({ profileId: profileId as Id<"profiles">, otherId: action.profileId as Id<"profiles"> }));
+          }
           return;
 
         case "simulateFriends":
-          if (meId) {
-            run(
-              demoFriends({ userId: meId }).then(() =>
-                localDispatch({ type: "toast", message: "You're connected with Maya and Leo. See them under Your people." }),
-              ),
-            );
-          }
+          if (!profileId) return;
+          run(
+            demoFriends({ profileId: profileId as Id<"profiles">, ...at }).then(() =>
+              localDispatch({
+                type: "toast",
+                message: "You're connected with Maya and Leo. You'll see them under Your people at Cal Hacks.",
+              }),
+            ),
+          );
           return;
 
         case "requestChat":
           if (!meId) return;
           run(
             createRequest({ attendeeId: meId, panelId: action.panelId as Id<"users">, note: action.note }).then(() =>
-              localDispatch({ type: "log", activityType: "request_chat", targetId: action.panelId }),
+              localDispatch({ type: "log", activityType: "request_chat", targetId: action.panelId, userId: meId }),
             ),
           );
           return;
@@ -609,21 +731,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
               actorId: meId,
               status: action.status,
             }).then(() => {
-              if (activityType) localDispatch({ type: "log", activityType, targetId: req.panelId });
+              if (activityType) localDispatch({ type: "log", activityType, targetId: req.panelId, userId: meId });
             }),
           );
           return;
         }
 
+        case "log":
+          if (meId) localDispatch({ ...action, userId: meId });
+          return;
+
         case "viewAs": {
           const target = users.find((u) => u.id === action.userId);
-          if (target) localDispatch({ type: "viewAs", userId: target.id, role: target.role });
+          if (target) localDispatch({ type: "viewAs", userId: target.id === myUserId ? null : target.id, role: target.role });
           return;
         }
 
         case "simulateAccept": {
           const req = requests
-            .filter((r) => r.attendeeId === local.currentUserId && r.status === "waiting")
+            .filter((r) => r.attendeeId === meId && r.status === "waiting")
             .sort((a, b) => a.createdAt - b.createdAt)[0];
           if (!req) {
             localDispatch({ type: "toast", message: "Send a chat request first, then try this again." });
@@ -640,9 +766,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         case "simulateLeaving": {
-          const req = requests.find(
-            (r) => r.attendeeId === local.currentUserId && (r.status === "waiting" || r.status === "accepted"),
-          );
+          const req = requests.find((r) => r.attendeeId === meId && (r.status === "waiting" || r.status === "accepted"));
           if (!req) {
             localDispatch({ type: "toast", message: "Send a chat request first, then try this again." });
             return;
@@ -655,10 +779,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         case "reset": {
           if (!event) return;
-          const role = users.find((u) => u.id === local.myUserId)?.role;
+          const mine = participations.find((p) => p.eventId === event.id);
+          const stack: Screen[] = !local.profileId ? [{ name: "welcome" }] : mine ? [homeFor(mine.role)] : [{ name: "events" }];
           run(
             resetDemo({ eventId: event.id as Id<"events"> }).then(() =>
-              localDispatch({ type: "reset", now: action.now, role }),
+              localDispatch({ type: "reset", now: action.now, stack }),
             ),
           );
           return;
@@ -669,7 +794,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     },
     [
-      createUser,
+      createProfile,
+      updateProfile,
+      joinEvent,
       updateUser,
       setUserStatus,
       huddleRespond,
@@ -684,18 +811,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  // Opened an invite link: connect as soon as there's an account (right after
-  // sign-up if needed). The code's owner gave it out, which is their consent.
+  // Opened an invite link: connect as soon as there's a profile (right after
+  // making one if needed). The code's owner gave it out, which is their consent.
   useEffect(() => {
-    if (!local.booted || !local.myUserId) return;
+    if (!local.booted || !profileId) return;
     const code = takePendingInvite();
     if (code) dispatch({ type: "connectCode", code });
-  }, [local.booted, local.myUserId, dispatch]);
+  }, [local.booted, profileId, dispatch]);
 
   const value = useMemo<AppContextValue | null>(() => {
     if (!event || !users) return null;
-    const state: State = { ...local, event, zones, users, requests, huddles, stats, connections };
-    const me = users.find((u) => u.id === local.currentUserId);
+    const state: State = {
+      ...local,
+      profileId,
+      eventId: event.id,
+      myUserId,
+      currentUserId,
+      profile,
+      events,
+      participations,
+      event,
+      zones,
+      users,
+      requests,
+      huddles,
+      stats,
+      connections,
+    };
+    const me = users.find((u) => u.id === currentUserId);
     return {
       state,
       me,
@@ -704,9 +847,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       navigate: (screen, replace) => dispatch({ type: "navigate", screen, replace }),
       back: () => dispatch({ type: "back" }),
     };
-  }, [local, event, zones, users, requests, huddles, stats, connections, dispatch]);
+  }, [
+    local,
+    profileId,
+    myUserId,
+    currentUserId,
+    profile,
+    events,
+    participations,
+    event,
+    zones,
+    users,
+    requests,
+    huddles,
+    stats,
+    connections,
+    dispatch,
+  ]);
 
-  if (!event || !users || !local.booted) return <div className="min-h-[var(--app-h)] bg-bg" />;
+  if (!local.booted || !event || !users) return <div className="min-h-[var(--app-h)] bg-bg" />;
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

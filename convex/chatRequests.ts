@@ -10,7 +10,6 @@ const NOTE_MAX = 100;
 const ACTIVE = ["waiting", "accepted"] as const;
 
 const isActive = (r: Doc<"chatRequests">) => r.status === "waiting" || r.status === "accepted";
-const firstName = (u: Doc<"users">) => u.name.split(" ")[0];
 
 async function activeForPanel(ctx: QueryCtx, panelId: Id<"users">) {
   const rows: Doc<"chatRequests">[] = [];
@@ -34,16 +33,18 @@ export const create = mutation({
     if (!attendee || !panel || panel.role !== "panel" || panel.eventId !== attendee.eventId) {
       throw new ConvexError("That speaker isn't at this event.");
     }
+    const panelProfile = panel.profileId ? await ctx.db.get("profiles", panel.profileId) : null;
+    const first = panelProfile?.name.split(" ")[0] ?? "This speaker";
     if (attendeeId === panelId) throw new ConvexError("You can't request a chat with yourself.");
-    if (!panel.visible) throw new ConvexError(`${firstName(panel)} has left the event floor.`);
-    if (panel.requestsPaused) throw new ConvexError(`${firstName(panel)} paused requests.`);
+    if (!panel.visible) throw new ConvexError(`${first} has left the event floor.`);
+    if (panel.requestsPaused) throw new ConvexError(`${first} paused requests.`);
 
     const mine = await ctx.db
       .query("chatRequests")
       .withIndex("by_attendee", (q) => q.eq("attendeeId", attendeeId))
       .take(500);
     if (mine.some((r) => r.panelId === panelId && isActive(r))) {
-      throw new ConvexError(`You're already in line for ${firstName(panel)}.`);
+      throw new ConvexError(`You're already in line for ${first}.`);
     }
 
     // The heads-up job may already have run if they leave within 10 minutes.

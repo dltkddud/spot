@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ZONE_MAP, type ZoneIcon } from "@/lib/floorplan";
+import type { ZoneIcon } from "@/lib/floorplan";
 
 // One drawing per zone, all on a 24px grid with the same 2px stroke, so they
 // read as one set at any size.
@@ -20,21 +20,31 @@ export const zoneIconPaths: Record<ZoneIcon, ReactNode> = {
   doors3: <path d="M2 20h20M3 20V6h5v14M9.5 20V6h5v14M16 20V6h5v14M6.5 13v.5M13 13v.5M19.5 13v.5" />,
   // Theater: a stage with the curtains pulled back.
   theater: <path d="M2 4h20M4 4v16M20 4v16M4 4c1 6 3 9 6 10M20 4c-1 6-3 9-6 10M2 20h20" />,
+  // Coffee counter: a cup with steam.
+  coffee: <path d="M4 9h12v5a6 6 0 0 1-6 6 6 6 0 0 1-6-6V9zM16 11h1.5a2.5 2.5 0 0 1 0 5H16M8 3v3M12 3v3" />,
+  // Patio: an umbrella over a table.
+  patio: <path d="M3 10a9 6 0 0 1 18 0H3zM12 4v16M8 20h8" />,
+  // Expo floor: a row of booths under one roof.
+  booths: <path d="M5 4h14l2 5c0 1.4-1.3 2.5-3 2.5S15 10.4 15 9c0 1.4-1.3 2.5-3 2.5S9 10.4 9 9c0 1.4-1.3 2.5-3 2.5S3 10.4 3 9l2-5zM4 11v9h16v-9M10 20v-5h4v5" />,
+  // Robot arena: a robot head.
+  robot: <path d="M6 9h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM12 9V5M10 4h4M9 14v.5M15 14v.5M2 13v3M22 13v3" />,
 };
 
 export const ICON_STROKE = 2;
 
-export function iconFor(code: string) {
-  const name = ZONE_MAP[code]?.icon;
-  return name ? zoneIconPaths[name] : null;
+type ZoneLike = { code: string; icon?: string };
+
+export function iconFor(zone: ZoneLike) {
+  return zone.icon && zone.icon in zoneIconPaths ? zoneIconPaths[zone.icon as ZoneIcon] : null;
 }
 
 export const PIN_PATH = "M12 29s-11-9.4-11-17.2C1 5.6 5.9 1 12 1s11 4.6 11 10.8C23 19.6 12 29 12 29z";
 
 // A zone everywhere in the app: the Spot pin with the zone's drawing inside,
 // and its code (A–G) in a small badge on the corner.
-export function ZoneMark({ code, size = 32 }: { code: string; size?: number }) {
-  const icon = iconFor(code);
+export function ZoneMark({ zone, size = 32 }: { zone: ZoneLike; size?: number }) {
+  const { code } = zone;
+  const icon = iconFor(zone);
   const badge = Math.max(15, Math.round(size * 0.42));
   return (
     <span

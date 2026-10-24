@@ -6,27 +6,44 @@ import { AppProvider, useApp } from "@/lib/store";
 import { Explore } from "./screens/Explore";
 import { Me } from "./screens/Me";
 import { MyRequests } from "./screens/MyRequests";
-import { Onboarding } from "./screens/Onboarding";
+import { EditProfile } from "./screens/EditProfile";
+import { Events } from "./screens/Events";
+import { JoinEvent, ProfileSetup } from "./screens/Onboarding";
 import { PanelDetail } from "./screens/PanelDetail";
 import { PanelNow } from "./screens/PanelNow";
 import { Welcome } from "./screens/Welcome";
 import { ZonePicker } from "./screens/ZonePicker";
 import { ZoneDetail } from "./screens/Zones";
 import { PhoneFrame, scrollAppToTop } from "./PhoneFrame";
-import { PinMark, TabBar, Toasts } from "./ui";
+import { Icon, PinMark, RoleBadge, TabBar, Toasts } from "./ui";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
+// Home screens: which event I'm at and how. Tapping it opens the Events list.
 function HomeHeader() {
-  const { state, me } = useApp();
+  const { state, me, navigate } = useApp();
   return (
-    <header className="sticky top-[var(--safe-top)] z-20 flex h-14 items-center gap-3 border-b border-line bg-bg/95 px-5 backdrop-blur">
-      <PinMark size={30} />
-      <span className="flex-1 leading-tight">
-        <span className="block text-base font-black">Spot</span>
-        <span className="block text-[11px] text-muted">{state.event.name}</span>
-      </span>
-      {me && <span className="text-xs font-semibold text-muted">Hi, {me.name.split(" ")[0]}</span>}
+    <header className="sticky top-[var(--safe-top)] z-20 border-b border-line bg-bg/95 backdrop-blur">
+      <button
+        onClick={() => navigate({ name: "events" })}
+        className="flex h-14 w-full items-center gap-3 px-5 text-left transition hover:bg-primary-soft/50"
+        aria-label={`${state.event.name}. Switch event`}
+      >
+        <PinMark size={30} />
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="flex items-center gap-1 truncate text-base font-black">
+            {state.event.name}
+            <Icon name="chevron" size={16} />
+          </span>
+          <span className="block truncate text-[11px] text-muted">{state.event.venue}</span>
+        </span>
+        {me && (
+          <span className="flex shrink-0 flex-col items-end gap-0.5">
+            <RoleBadge role={me.role} />
+            <span className="text-[11px] font-semibold text-muted">{me.name.split(" ")[0]}</span>
+          </span>
+        )}
+      </button>
     </header>
   );
 }
@@ -49,8 +66,14 @@ function Router() {
   switch (screen.name) {
     case "welcome":
       return <Welcome />;
-    case "onboarding":
-      return <Onboarding />;
+    case "profileSetup":
+      return <ProfileSetup />;
+    case "events":
+      return <Events />;
+    case "joinEvent":
+      return <JoinEvent key={screen.eventId} eventId={screen.eventId} />;
+    case "editProfile":
+      return withTabs(<EditProfile key={me?.id} />);
     case "zonePicker":
       return screen.fromOnboarding ? <ZonePicker fromOnboarding /> : withTabs(<ZonePicker />);
     case "explore":

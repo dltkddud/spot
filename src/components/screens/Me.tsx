@@ -5,7 +5,7 @@ import { OUTFIT_WORD_LIMIT } from "@/lib/mockData";
 import { useApp } from "@/lib/store";
 import { dayTime } from "@/lib/time";
 import { ConnectWithFriends, ShareWithPicker } from "../Connections";
-import { Avatar, Button, Header, inputClass, PillButton, SectionTitle, StatusPill, ZoneBadge } from "../ui";
+import { Avatar, Button, Header, inputClass, PillButton, RoleBadge, roleLabel, SectionTitle, StatusPill, ZoneBadge } from "../ui";
 
 function wordCount(s: string) {
   return s.trim() ? s.trim().split(/\s+/).length : 0;
@@ -35,12 +35,16 @@ export function Me() {
     { label: "Connections made", value: connectionsMade },
   ];
 
-  const demoId = (seedKey: string) => state.users.find((u) => u.seedKey === seedKey)?.id;
+  // Demo: a speaker and a guest at this event (Dana and Lena at Cal Hacks).
+  const demoPerson = (role: "panel" | "attendee", preferred: string) =>
+    state.users.find((u) => u.seedKey === preferred) ?? state.users.find((u) => u.seedKey && u.role === role);
   const viewAsOptions = [
     ...(state.myUserId ? [{ id: state.myUserId, label: "You" }] : []),
-    { id: demoId("p-dana"), label: "Dana (speaker)" },
-    { id: demoId("a-lena"), label: "Lena (attendee)" },
-  ].filter((o): o is { id: string; label: string } => !!o.id);
+    ...[demoPerson("panel", "p-dana"), demoPerson("attendee", "a-lena")]
+      .filter((u) => !!u)
+      .map((u) => ({ id: u.id, label: `${u.name.split(" ")[0]} (${roleLabel(u.role).toLowerCase()})` })),
+  ];
+  const viewingAsMe = state.currentUserId === state.myUserId;
 
   return (
     <>
@@ -51,8 +55,9 @@ export function Me() {
             <Avatar user={me} size={52} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-lg font-extrabold">{me.name}</p>
-              <p className="text-xs font-semibold text-muted">
-                {me.role === "panel" ? "Sharing something" : "Here to meet people"}
+              <p className="mt-0.5 flex items-center gap-1.5 text-xs font-semibold text-muted">
+                <RoleBadge role={me.role} />
+                at {state.event.name}
               </p>
             </div>
             <StatusPill user={me} now={state.now} />
@@ -66,6 +71,17 @@ export function Me() {
               </span>
             ))}
           </div>
+          {viewingAsMe && (
+            <Button
+              variant="secondary"
+              icon="edit"
+              block
+              className="mt-4"
+              onClick={() => navigate({ name: "editProfile" })}
+            >
+              Edit profile
+            </Button>
+          )}
         </section>
 
         <SectionTitle>Where you are</SectionTitle>

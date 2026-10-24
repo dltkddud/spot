@@ -8,7 +8,10 @@ export type EventInfo = {
   id: string;
   name: string;
   venue: string;
+  startsAt?: number;
   endsAt: number;
+  // Set when the venue has a floor plan to show on the Map.
+  floorPlan?: string;
 };
 
 export type Zone = {
@@ -16,16 +19,40 @@ export type Zone = {
   code: string;
   name: string;
   landmark: string;
+  icon?: string;
 };
 
+// Me across every event: who I am, how to reach me, my connect code.
+export type Profile = {
+  id: string;
+  name: string;
+  headline: string;
+  interests: string[];
+  linkedinUrl?: string;
+  contactUrl?: string;
+  connectCode?: string;
+  openToHuddles?: boolean;
+};
+
+// An event I've joined and how I'm there.
+export type Participation = {
+  eventId: string;
+  userId: string;
+  role: Role;
+};
+
+// Someone at an event: their part in it, with their profile filled in.
+// id is the event-specific id that requests and huddles use.
 export type User = {
   id: string;
+  profileId: string;
   name: string;
   role: Role;
   headline: string;
   talkTitle?: string;
   interests: string[];
   outfit: string;
+  linkedinUrl?: string;
   contactUrl?: string;
   zoneId?: string;
   status: Status;
@@ -37,19 +64,19 @@ export type User = {
   openToHuddles?: boolean;
   // Who sees my zone. Others' visible is already worked out for me by the server.
   shareWith?: ShareWith;
-  // Only present on my own profile.
-  connectCode?: string;
 };
 
 export type ShareWith = "everyone" | "connections" | "nobody";
 
+// A profile I'm connected with. userId is set when they're at the current event.
 export type Connection = {
-  userId: string;
+  profileId: string;
+  name: string;
+  userId?: string;
   // "huddle" only on older connections; new ones come from codes and links.
   source: "huddle" | "code" | "demo";
   createdAt: number;
 };
-
 
 export type ChatRequest = {
   id: string;

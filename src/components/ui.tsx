@@ -29,7 +29,9 @@ const iconPaths = {
       <circle cx="12" cy="12" r="8" />
       <path d="M12 8v4l2.5 2.5" />
     </>
-  ),  users: (
+  ),  chevron: <path d="M7 10l5 5 5-5" />,
+  edit: <path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4" />,
+  users: (
     <>
       <circle cx="9" cy="8" r="3.2" />
       <path d="M3 19.5c.8-3.3 3.1-5 6-5s5.2 1.7 6 5" />
@@ -91,6 +93,21 @@ export function Logo({ size = "sm" }: { size?: "sm" | "lg" }) {
   );
 }
 
+// How someone is at this event. Stored as panel/attendee; shown as Speaker/Guest.
+export const roleLabel = (role: "panel" | "attendee") => (role === "panel" ? "Speaker" : "Guest");
+
+export function RoleBadge({ role }: { role: "panel" | "attendee" }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${
+        role === "panel" ? "bg-primary text-on-primary" : "bg-primary-soft text-primary-ink"
+      }`}
+    >
+      {roleLabel(role)}
+    </span>
+  );
+}
+
 export function statusLabel(status: Status, leavingAt: number | undefined, now: number) {
   if (status === "available") return "Free to talk";
   if (status === "talking") return "In a conversation";
@@ -125,7 +142,7 @@ export function ZoneBadge({ zone, size = "sm" }: { zone?: Zone; size?: "sm" | "l
   if (!zone) return <span className="text-sm text-muted">No zone set</span>;
   return (
     <span className="inline-flex items-center gap-2">
-      <ZoneMark code={zone.code} size={size === "lg" ? 48 : 26} />
+      <ZoneMark zone={zone} size={size === "lg" ? 48 : 26} />
       <span className={size === "lg" ? "text-lg font-bold" : "text-sm font-semibold"}>{zone.name}</span>
     </span>
   );
@@ -332,7 +349,7 @@ export function TabBar() {
   const shared: Tab[] = [
     { label: "Explore", screen: { name: "explore" }, match: ["explore", "zoneDetail", "panelDetail"], icon: icons.explore },
     { label: "Requests", screen: { name: "requests" }, match: ["requests"], icon: icons.requests, badge: myActive },
-    { label: "Me", screen: { name: "me" }, match: ["me", "zonePicker"], icon: icons.me },
+    { label: "Me", screen: { name: "me" }, match: ["me", "zonePicker", "editProfile"], icon: icons.me },
   ];
   const tabs: Tab[] =
     me.role === "panel"

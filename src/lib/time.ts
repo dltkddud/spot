@@ -36,3 +36,13 @@ export function dayTime(ts: number): string {
     timeZone: VENUE_TIME_ZONE,
   });
 }
+
+// "Sat Oct 24 – Sun Oct 25", or "Thu Oct 29, 8:00 – 11:00 AM" for one day.
+export function eventDates(startsAt: number | undefined, endsAt: number): string {
+  const day = (ts: number) =>
+    new Date(ts).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: VENUE_TIME_ZONE });
+  if (!startsAt) return `Until ${day(endsAt)}`;
+  if (day(startsAt) !== day(endsAt)) return `${day(startsAt)} – ${day(endsAt)}`;
+  const start = clockTime(startsAt).replace(/ (AM|PM)$/, (m) => (clockTime(endsAt).endsWith(m.trim()) ? "" : m));
+  return `${day(startsAt)}, ${start} – ${clockTime(endsAt)}`;
+}

@@ -20,9 +20,11 @@ export function ExploreMap() {
   return (
     <div>
       <p className="text-sm text-muted">Tap a zone to see who&apos;s there.</p>
-      <div className="mt-4">
-        <FloorPlan zones={state.zones} myZoneId={me.zoneId} onSelect={open} />
-      </div>
+      {state.event.floorPlan && (
+        <div className="mt-4">
+          <FloorPlan zones={state.zones} myZoneId={me.zoneId} onSelect={open} />
+        </div>
+      )}
 
       <div className="mt-5 space-y-3">
         {state.zones.map((z) => {
@@ -39,7 +41,7 @@ export function ExploreMap() {
                 isMine ? "border-primary" : "border-line"
               }`}
             >
-              <ZoneMark code={z.code} size={48} />
+              <ZoneMark zone={z} size={48} />
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="font-extrabold">{z.name}</span>
@@ -61,7 +63,7 @@ export function ExploreMap() {
                       ? "No speakers"
                       : `${panels.length} speaker${panels.length > 1 ? "s" : ""}, ${free} free`}
                     {people.length - panels.length > 0 &&
-                      `, ${people.length - panels.length} attendee${people.length - panels.length > 1 ? "s" : ""}`}
+                      `, ${people.length - panels.length} guest${people.length - panels.length > 1 ? "s" : ""}`}
                   </span>
                 </span>
               </span>
@@ -95,7 +97,7 @@ function PersonCard({ person }: { person: User }) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-lg font-extrabold leading-tight">{person.name}</p>
           <p className="mt-0.5 text-xs font-bold text-primary-ink">
-            {person.role === "panel" ? "Speaker or maker" : "Attendee"}
+            {person.role === "panel" ? "Speaker or maker" : "Guest"}
           </p>
           <div className="mt-1.5">
             <StatusPill user={person} now={state.now} />

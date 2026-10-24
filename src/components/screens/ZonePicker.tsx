@@ -16,10 +16,10 @@ export function ZonePreview({ zone, here, action }: { zone: Zone; here: number; 
   const { state } = useApp();
   return (
     <section className="overflow-hidden rounded-2xl border border-line bg-surface">
-      <FloorPlan zones={state.zones} focusId={zone.id} selectedId={zone.id} />
+      {state.event.floorPlan && <FloorPlan zones={state.zones} focusId={zone.id} selectedId={zone.id} />}
       <div className="p-4">
         <div className="flex items-start gap-3">
-          <ZoneMark code={zone.code} size={52} />
+          <ZoneMark zone={zone} size={52} />
           <div className="min-w-0 flex-1 pl-1">
             <p className="text-lg font-extrabold leading-tight">{zone.name}</p>
             <p className="mt-1 text-sm text-muted">{zone.landmark}</p>
@@ -50,17 +50,18 @@ export function ZonePicker({ fromOnboarding }: { fromOnboarding?: boolean }) {
     <>
       <Header title="Where are you now?" onBack={fromOnboarding ? undefined : back} />
       <main className="px-5 pb-28 pt-5">
-        <p className="text-muted">Tap where you&apos;re standing on the floor plan. Use the landmark if you&apos;re not sure.</p>
-        <div className="mt-4">
-          <FloorPlan
-            zones={state.zones}
-            selectedId={picked}
-            myZoneId={me.zoneId}
-            onSelect={setPicked}
-          />
-        </div>
+        {state.event.floorPlan ? (
+          <>
+            <p className="text-muted">Tap where you&apos;re standing on the floor plan. Use the landmark if you&apos;re not sure.</p>
+            <div className="mt-4">
+              <FloorPlan zones={state.zones} selectedId={picked} myZoneId={me.zoneId} onSelect={setPicked} />
+            </div>
+          </>
+        ) : (
+          <p className="text-muted">Pick the zone you&apos;re standing in. Use the landmark if you&apos;re not sure.</p>
+        )}
 
-        {pickedZone && (
+        {state.event.floorPlan && pickedZone && (
           <div className="mt-4">
             <ZonePreview
               zone={pickedZone}
@@ -87,7 +88,7 @@ export function ZonePicker({ fromOnboarding }: { fromOnboarding?: boolean }) {
                   selected ? "border-primary bg-primary-soft" : "border-line bg-surface"
                 }`}
               >
-                <ZoneMark code={z.code} size={44} />
+                <ZoneMark zone={z} size={44} />
                 <span className="mt-3 text-base font-extrabold leading-tight">{z.name}</span>
                 <span className="mt-1 text-xs leading-snug text-muted">{z.landmark}</span>
                 <span className="mt-auto pt-2 text-xs font-semibold text-muted">{peopleHere(hereCount(z.id))}</span>

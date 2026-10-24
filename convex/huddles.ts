@@ -11,7 +11,8 @@ const MAX_MEMBERS = 3;
 
 type Huddle = Doc<"huddles">;
 type Member = Doc<"huddleMembers">;
-type Candidate = { request: Doc<"chatRequests">; user: Doc<"users"> };
+// Someone waiting in a line, with the interests from their profile.
+type Candidate = { request: Doc<"chatRequests">; user: Doc<"users">; interests: string[] };
 
 const isOpen = (h: Huddle) => h.status === "proposed" || h.status === "formed";
 const overlap = (a: string[], b: string[]) => a.filter((i) => b.includes(i));
@@ -75,7 +76,12 @@ async function demoSaysYes(ctx: MutationCtx, huddleId: Id<"huddles">) {
   await formIfReady(ctx, huddleId);
 }
 
-async function addMember(ctx: MutationCtx, huddleId: Id<"huddles">, c: Candidate) {
+async function interestsOf(ctx: QueryCtx, user: Doc<"users">) {
+  const profile = user.profileId ? await ctx.db.get("profiles", user.profileId) : null;
+  return { interests: profile?.interests ?? [], open: profile?.openToHuddles !== false };
+}
+
+async function addMember(ctx: MutationCtx, huddleId: Id<"huddles">, c: { request: Doc<"chatRequests">; user: Doc<"users"> }) {
   await ctx.db.insert("huddleMembers", {
     huddleId,
     userId: c.user._id,
@@ -114,7 +120,9 @@ export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
   for (const request of waiting) {
     if (busy.has(request._id)) continue;
     const user = await ctx.db.get("users", request.attendeeId);
-    if (user && user.openToHuddles !== false) pool.push({ request, user });
+    if (!user) continue;
+    const { interests, open } = await interestsOf(ctx, user);
+    if (open) pool.push({ request, user, interests });
   }
   pool.sort((a, b) => a.request.createdAt - b.request.createdAt);
 
@@ -123,7 +131,7 @@ export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
     let score = 0;
     for (const c of pool) {
       if (with_.some((id) => seen.has(pairKey(id, c.user._id)))) continue;
-      const n = overlap(c.user.interests, interests).length;
+      const n = overlap(c.interests, interests).length;
       if (n > score) [pick, score] = [c, n];
     }
     if (pick) pool.splice(pool.indexOf(pick), 1);
@@ -139,7 +147,7 @@ export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
       if (!c) break;
       await addMember(ctx, huddle._id, c);
       ids.push(c.user._id);
-      shared = overlap(shared, c.user.interests);
+      shared = overlap(shared, c.interests);
       added = true;
     }
     if (!added) continue;
@@ -149,14 +157,14 @@ export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
 
   while (pool.length >= 2) {
     const first = pool.shift()!;
-    const second = best([first.user._id], first.user.interests);
+    const second = best([first.user._id], first.interests);
     if (!second) continue;
     const group = [first, second];
-    let shared = overlap(first.user.interests, second.user.interests);
+    let shared = overlap(first.interests, second.interests);
     const third = best([first.user._id, second.user._id], shared);
     if (third) {
       group.push(third);
-      shared = overlap(shared, third.user.interests);
+      shared = overlap(shared, third.interests);
     }
     const huddleId = await ctx.db.insert("huddles", {
       eventId: panel.eventId,
@@ -257,6 +265,7 @@ export const demoPropose = mutation({
   handler: async (ctx, { attendeeId }) => {
     const me = await ctx.db.get("users", attendeeId);
     if (!me) throw new ConvexError("User not found.");
+    const myInterests = (await interestsOf(ctx, me)).interests;
     const mine = (
       await ctx.db
         .query("chatRequests")
@@ -269,16 +278,18 @@ export const demoPropose = mutation({
 
     for (const request of mine) {
       if (await openHuddleOf(ctx, request._id)) continue;
-      const demo = (
+      const guests = (
         await ctx.db
           .query("users")
           .withIndex("by_event_role", (q) => q.eq("eventId", me.eventId).eq("role", "attendee"))
           .take(500)
-      )
-        .filter((u) => u.seedKey && u._id !== me._id)
-        .map((u) => ({ u, shared: overlap(me.interests, u.interests) }))
-        .filter((x) => x.shared.length > 0)
-        .sort((a, b) => b.shared.length - a.shared.length);
+      ).filter((u) => u.seedKey && u._id !== me._id);
+      const demo = [];
+      for (const u of guests) {
+        const shared = overlap(myInterests, (await interestsOf(ctx, u)).interests);
+        if (shared.length > 0) demo.push({ u, shared });
+      }
+      demo.sort((a, b) => b.shared.length - a.shared.length);
 
       for (const { u, shared } of demo) {
         const theirs = await ctx.db

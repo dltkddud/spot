@@ -14,6 +14,7 @@ import type * as connections from "../connections.js";
 import type * as events from "../events.js";
 import type * as huddles from "../huddles.js";
 import type * as leaving from "../leaving.js";
+import type * as profiles from "../profiles.js";
 import type * as seed from "../seed.js";
 import type * as users from "../users.js";
 
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   events: typeof events;
   huddles: typeof huddles;
   leaving: typeof leaving;
+  profiles: typeof profiles;
   seed: typeof seed;
   users: typeof users;
 }>;

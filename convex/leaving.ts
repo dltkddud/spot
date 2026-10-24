@@ -19,6 +19,15 @@ async function activeRequests(ctx: MutationCtx, panelId: Id<"users">) {
   return [...waiting, ...accepted];
 }
 
+// A speaker's line closes, because they left or stopped being a speaker:
+// huddles break up and everyone still waiting or called up is marked missed.
+export async function closeLine(ctx: MutationCtx, panelId: Id<"users">) {
+  await dissolveAllFor(ctx, panelId);
+  for (const r of await activeRequests(ctx, panelId)) {
+    await ctx.db.patch("chatRequests", r._id, { status: "missed" });
+  }
+}
+
 // Call after setting a speaker's leavingAt. Older jobs see a different
 // leavingAt when they run and do nothing, so changing or cancelling is safe.
 export async function scheduleLeaving(ctx: MutationCtx, userId: Id<"users">, leavingAt: number) {
@@ -51,10 +60,7 @@ export const leave = internalMutation({
   returns: v.null(),
   handler: async (ctx, { userId, leavingAt }) => {
     if (!(await stillLeavingAt(ctx, userId, leavingAt))) return null;
-    await dissolveAllFor(ctx, userId);
-    for (const r of await activeRequests(ctx, userId)) {
-      await ctx.db.patch("chatRequests", r._id, { status: "missed" });
-    }
+    await closeLine(ctx, userId);
     await ctx.db.patch("users", userId, {
       visible: false,
       shareWith: "nobody",

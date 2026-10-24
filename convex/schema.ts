@@ -8,7 +8,12 @@ export default defineSchema({
     endsAt: v.number(),
     // The endsAt value the end-of-event cleanup is currently scheduled for.
     cleanupScheduledFor: v.optional(v.number()),
-  }),
+    // Which mockData event this is (e.g. "calhacks-13"), so seed can find it again.
+    key: v.optional(v.string()),
+    startsAt: v.optional(v.number()),
+    // Set when the venue has a floor plan for the Map (see src/lib/floorplan.ts).
+    floorPlan: v.optional(v.string()),
+  }).index("by_key", ["key"]),
 
   zones: defineTable({
     eventId: v.id("events"),
@@ -16,17 +21,37 @@ export default defineSchema({
     name: v.string(),
     landmark: v.string(),
     order: v.number(),
+    // Name of the zone's drawing in components/ZoneIcon.tsx.
+    icon: v.optional(v.string()),
   }).index("by_event", ["eventId"]),
 
+  // A person across every event: who they are and how to reach them.
+  profiles: defineTable({
+    name: v.string(),
+    headline: v.string(),
+    interests: v.array(v.string()),
+    linkedinUrl: v.optional(v.string()),
+    // Any other link (site, GitHub, email).
+    contactUrl: v.optional(v.string()),
+    // 6-character code friends type (or open as a link) to connect with me.
+    connectCode: v.optional(v.string()),
+    // false = never suggest huddles to me. Missing means yes.
+    openToHuddles: v.optional(v.boolean()),
+    // Demo people created by seed keep their mockData id here (e.g. "p-dana").
+    seedKey: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_connect_code", ["connectCode"])
+    .index("by_seed_key", ["seedKey"]),
+
+  // One person at one event. Chat requests and huddles point at these ids.
   users: defineTable({
     eventId: v.id("events"),
-    name: v.string(),
+    // Always set once the profiles-and-events migration has run.
+    profileId: v.optional(v.id("profiles")),
     role: v.union(v.literal("panel"), v.literal("attendee")),
-    headline: v.string(),
     talkTitle: v.optional(v.string()),
-    interests: v.array(v.string()),
     outfit: v.string(),
-    contactUrl: v.optional(v.string()),
     zoneId: v.optional(v.id("zones")),
     status: v.union(
       v.literal("available"),
@@ -35,24 +60,28 @@ export default defineSchema({
     ),
     leavingAt: v.optional(v.number()),
     visible: v.boolean(),
+    // Who sees my zone. visible stays true only for "everyone"; missing means
+    // "everyone" if visible, otherwise "nobody".
+    shareWith: v.optional(v.union(v.literal("everyone"), v.literal("connections"), v.literal("nobody"))),
     requestsPaused: v.boolean(),
     updatedAt: v.number(),
     // Demo people created by seed keep their mockData id here (e.g. "p-dana").
     seedKey: v.optional(v.string()),
-    // Removed feature ("Still here?"). Cleared by the remove-still-here-and-stay migration
-    // in seed.ts; delete this line once both deployments have run it.
-    locationCheckAt: v.optional(v.number()),
-    // false = never suggest huddles to me. Missing means yes.
-    openToHuddles: v.optional(v.boolean()),
-    // Who sees my zone. visible stays true only for "everyone"; missing means
-    // "everyone" if visible, otherwise "nobody".
-    shareWith: v.optional(v.union(v.literal("everyone"), v.literal("connections"), v.literal("nobody"))),
-    // 6-character code friends type (or open as a link) to connect with me.
+
+    // Moved to profiles by the profiles-and-events migration in seed.ts, which
+    // also clears them. Delete these once both deployments have run it.
+    name: v.optional(v.string()),
+    headline: v.optional(v.string()),
+    interests: v.optional(v.array(v.string())),
+    contactUrl: v.optional(v.string()),
     connectCode: v.optional(v.string()),
+    openToHuddles: v.optional(v.boolean()),
+    // Removed feature ("Still here?"). Cleared by the remove-still-here-and-stay migration.
+    locationCheckAt: v.optional(v.number()),
   })
     .index("by_event", ["eventId"])
     .index("by_event_role", ["eventId", "role"])
-    .index("by_connect_code", ["connectCode"]),
+    .index("by_profile_and_event", ["profileId", "eventId"]),
 
   chatRequests: defineTable({
     eventId: v.id("events"),
@@ -110,13 +139,24 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_request", ["requestId"]),
 
-  // People who agreed to share their zone with each other. One row per direction.
+  // Profiles that agreed to share their zone with each other, at every event
+  // they're both at. One row per direction.
+  profileConnections: defineTable({
+    profileId: v.id("profiles"),
+    otherId: v.id("profiles"),
+    source: v.union(v.literal("huddle"), v.literal("code"), v.literal("demo")),
+    // Who made the connection, so only the other person gets a "connected with you" banner.
+    by: v.optional(v.id("profiles")),
+    createdAt: v.number(),
+  }).index("by_profile_and_other", ["profileId", "otherId"]),
+
+  // Old per-event connections. The profiles-and-events migration moves them to
+  // profileConnections and empties this table; delete it after both deployments have run it.
   connections: defineTable({
     eventId: v.id("events"),
     userId: v.id("users"),
     otherId: v.id("users"),
     source: v.union(v.literal("huddle"), v.literal("code"), v.literal("demo")),
-    // Who made the connection, so only the other person gets a "connected with you" banner.
     by: v.optional(v.id("users")),
     createdAt: v.number(),
   }).index("by_user_and_other", ["userId", "otherId"]),
