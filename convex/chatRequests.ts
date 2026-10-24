@@ -34,7 +34,7 @@ export const create = mutation({
     if (!attendee || !panel || panel.role !== "panel" || panel.eventId !== attendee.eventId) {
       throw new ConvexError("That speaker isn't at this event.");
     }
-    if (attendee.role !== "attendee") throw new ConvexError("Switch to an attendee profile to request a chat.");
+    if (attendeeId === panelId) throw new ConvexError("You can't request a chat with yourself.");
     if (!panel.visible) throw new ConvexError(`${firstName(panel)} has left the event floor.`);
     if (panel.requestsPaused) throw new ConvexError(`${firstName(panel)} paused requests.`);
 

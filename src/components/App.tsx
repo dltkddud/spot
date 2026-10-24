@@ -3,7 +3,7 @@
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { useEffect, type ReactNode } from "react";
 import { AppProvider, useApp } from "@/lib/store";
-import { Discover } from "./screens/Discover";
+import { Explore } from "./screens/Explore";
 import { Me } from "./screens/Me";
 import { MyRequests } from "./screens/MyRequests";
 import { Onboarding } from "./screens/Onboarding";
@@ -11,7 +11,7 @@ import { PanelDetail } from "./screens/PanelDetail";
 import { PanelNow } from "./screens/PanelNow";
 import { Welcome } from "./screens/Welcome";
 import { ZonePicker } from "./screens/ZonePicker";
-import { ZoneDetail, Zones } from "./screens/Zones";
+import { ZoneDetail } from "./screens/Zones";
 import { PhoneFrame, scrollAppToTop } from "./PhoneFrame";
 import { PinMark, TabBar, Toasts } from "./ui";
 
@@ -53,12 +53,10 @@ function Router() {
       return <Onboarding />;
     case "zonePicker":
       return screen.fromOnboarding ? <ZonePicker fromOnboarding /> : withTabs(<ZonePicker />);
-    case "discover":
-      return withTabs(<Discover />, true);
+    case "explore":
+      return withTabs(<Explore view={screen.view ?? "people"} />, true);
     case "panelNow":
       return withTabs(<PanelNow />, true);
-    case "zones":
-      return withTabs(<Zones />);
     case "zoneDetail":
       return withTabs(<ZoneDetail zoneId={screen.zoneId} />);
     case "panelDetail":

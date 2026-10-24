@@ -294,16 +294,10 @@ export function PanelCard({ panel, onOpen }: { panel: User; onOpen: () => void }
 type Tab = { label: string; screen: Screen; match: Screen["name"][]; icon: ReactNode; badge?: number };
 
 const icons = {
-  discover: (
+  explore: (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="7" />
-      <path d="M20 20l-3.5-3.5" />
-    </svg>
-  ),
-  zones: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5L9 4z" />
-      <path d="M9 4v13.5M15 6.5V20" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="M15.5 8.5l-2 5-5 2 2-5 5-2z" />
     </svg>
   ),
   requests: (
@@ -334,19 +328,16 @@ export function TabBar() {
   ).length;
   const incoming = state.requests.filter((r) => r.panelId === me.id && r.status === "waiting").length;
 
+  // Guests: Explore / Requests / Me. Speakers add Now, their own line, in front.
+  const shared: Tab[] = [
+    { label: "Explore", screen: { name: "explore" }, match: ["explore", "zoneDetail", "panelDetail"], icon: icons.explore },
+    { label: "Requests", screen: { name: "requests" }, match: ["requests"], icon: icons.requests, badge: myActive },
+    { label: "Me", screen: { name: "me" }, match: ["me", "zonePicker"], icon: icons.me },
+  ];
   const tabs: Tab[] =
     me.role === "panel"
-      ? [
-          { label: "Now", screen: { name: "panelNow" }, match: ["panelNow"], icon: icons.now, badge: incoming },
-          { label: "Zones", screen: { name: "zones" }, match: ["zones", "zoneDetail"], icon: icons.zones },
-          { label: "Me", screen: { name: "me" }, match: ["me", "zonePicker"], icon: icons.me },
-        ]
-      : [
-          { label: "Discover", screen: { name: "discover" }, match: ["discover", "panelDetail"], icon: icons.discover },
-          { label: "Zones", screen: { name: "zones" }, match: ["zones", "zoneDetail"], icon: icons.zones },
-          { label: "Requests", screen: { name: "requests" }, match: ["requests"], icon: icons.requests, badge: myActive },
-          { label: "Me", screen: { name: "me" }, match: ["me", "zonePicker"], icon: icons.me },
-        ];
+      ? [{ label: "Now", screen: { name: "panelNow" }, match: ["panelNow"], icon: icons.now, badge: incoming }, ...shared]
+      : shared;
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur">

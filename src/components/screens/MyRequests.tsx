@@ -43,7 +43,10 @@ function Row({ r, children }: { r: ChatRequest; children?: ReactNode }) {
       </button>
       {huddle && (
         <div className="mt-3">
-          <HuddleCard huddle={huddle} compact />
+          <HuddleCard
+            huddle={huddle}
+            compact={huddle.status !== "proposed" || huddle.members.some((m) => m.requestId === r.id && m.response === "yes")}
+          />
         </div>
       )}
       {children}
@@ -68,8 +71,8 @@ export function MyRequests() {
           <div className="mt-8 rounded-2xl border border-dashed border-line p-6 text-center">
             <p className="font-extrabold">No requests yet</p>
             <p className="mt-1 text-sm text-muted">Open someone from Discover and tap Request to chat.</p>
-            <Button className="mt-4" icon="search" onClick={() => dispatch({ type: "resetTo", screen: { name: "discover" } })}>
-              Go to Discover
+            <Button className="mt-4" icon="search" onClick={() => dispatch({ type: "resetTo", screen: { name: "explore" } })}>
+              Go to Explore
             </Button>
           </div>
         )}

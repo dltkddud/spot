@@ -10,68 +10,66 @@ import { useMyPeople } from "../Connections";
 import { Avatar, Button, Header, Icon, StatusPill } from "../ui";
 import { ZonePreview } from "./ZonePicker";
 
-export function Zones() {
+// Explore → Map: the floor plan and every zone.
+export function ExploreMap() {
   const { state, me, navigate } = useApp();
   const myPeople = useMyPeople();
   if (!me) return null;
   const open = (zoneId: string) => navigate({ name: "zoneDetail", zoneId });
 
   return (
-    <>
-      <Header title="Zones" />
-      <main className="px-5 pb-28 pt-5">
-        <p className="text-sm text-muted">Tap a zone to see who&apos;s there.</p>
-        <div className="mt-4">
-          <FloorPlan zones={state.zones} myZoneId={me.zoneId} onSelect={open} />
-        </div>
+    <div>
+      <p className="text-sm text-muted">Tap a zone to see who&apos;s there.</p>
+      <div className="mt-4">
+        <FloorPlan zones={state.zones} myZoneId={me.zoneId} onSelect={open} />
+      </div>
 
-        <div className="mt-5 space-y-3">
-          {state.zones.map((z) => {
-            const people = state.users.filter((u) => u.visible && u.zoneId === z.id);
-            const panels = people.filter((u) => u.role === "panel");
-            const free = panels.filter((p) => p.status === "available").length;
-            const isMine = me.zoneId === z.id;
-            const friends = myPeople.filter((p) => p.visible && p.zoneId === z.id);
-            return (
-              <button
-                key={z.id}
-                onClick={() => open(z.id)}
-                className={`flex w-full items-center gap-4 rounded-2xl border bg-surface p-4 text-left transition duration-150 hover:border-primary/50 hover:shadow-md active:scale-[0.99] ${
-                  isMine ? "border-primary" : "border-line"
-                }`}
-              >
-                <ZoneMark code={z.code} size={48} />
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="font-extrabold">{z.name}</span>
-                    {isMine && <span className="text-xs font-bold text-primary-ink">You&apos;re here</span>}
-                    {friends.length > 0 && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-xs font-bold text-primary-ink">
-                        <Icon name="link" size={12} />
-                        {friends.length === 1 ? friends[0].name.split(" ")[0] : `${friends.length} of your people`}
-                      </span>
-                    )}
-                  </span>
-                  <span className="block truncate text-xs text-muted">{z.landmark}</span>
-                  <span className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {panels.slice(0, 3).map((p) => (
-                      <Avatar key={p.id} user={p} size={24} />
-                    ))}
-                    <span className="text-xs font-semibold text-muted">
-                      {panels.length === 0
-                        ? "No speakers"
-                        : `${panels.length} speaker${panels.length > 1 ? "s" : ""}, ${free} free`}
-                      {people.length - panels.length > 0 &&
-                        `, ${people.length - panels.length} attendee${people.length - panels.length > 1 ? "s" : ""}`}
+      <div className="mt-5 space-y-3">
+        {state.zones.map((z) => {
+          const people = state.users.filter((u) => u.visible && u.zoneId === z.id);
+          const panels = people.filter((u) => u.role === "panel");
+          const free = panels.filter((p) => p.status === "available").length;
+          const isMine = me.zoneId === z.id;
+          const friends = myPeople.filter((p) => p.visible && p.zoneId === z.id);
+          return (
+            <button
+              key={z.id}
+              onClick={() => open(z.id)}
+              className={`flex w-full items-center gap-4 rounded-2xl border bg-surface p-4 text-left transition duration-150 hover:border-primary/50 hover:shadow-md active:scale-[0.99] ${
+                isMine ? "border-primary" : "border-line"
+              }`}
+            >
+              <ZoneMark code={z.code} size={48} />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="font-extrabold">{z.name}</span>
+                  {isMine && <span className="text-xs font-bold text-primary-ink">You&apos;re here</span>}
+                  {friends.length > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-xs font-bold text-primary-ink">
+                      <Icon name="link" size={12} />
+                      {friends.length === 1 ? friends[0].name.split(" ")[0] : `${friends.length} of your people`}
                     </span>
+                  )}
+                </span>
+                <span className="block truncate text-xs text-muted">{z.landmark}</span>
+                <span className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {panels.slice(0, 3).map((p) => (
+                    <Avatar key={p.id} user={p} size={24} />
+                  ))}
+                  <span className="text-xs font-semibold text-muted">
+                    {panels.length === 0
+                      ? "No speakers"
+                      : `${panels.length} speaker${panels.length > 1 ? "s" : ""}, ${free} free`}
+                    {people.length - panels.length > 0 &&
+                      `, ${people.length - panels.length} attendee${people.length - panels.length > 1 ? "s" : ""}`}
                   </span>
                 </span>
-              </button>
-            );
-          })}
-        </div>
-      </main>
-    </>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

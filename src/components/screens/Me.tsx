@@ -92,7 +92,7 @@ export function Me() {
 
         <SectionTitle>Privacy</SectionTitle>
         <ShareWithPicker />
-        {me.role === "attendee" && (
+        {(
           <label className="mt-3 flex items-start gap-3 rounded-2xl border border-line bg-surface p-4">
             <input
               type="checkbox"
@@ -148,7 +148,7 @@ export function Me() {
           <Button variant="secondary" icon="link" block onClick={() => dispatch({ type: "simulateFriends" })}>
             Connect me with demo friends
           </Button>
-          {me.role === "attendee" && (
+          {(
             <div className="grid gap-2">
               <Button variant="secondary" onClick={() => dispatch({ type: "simulateAccept" })}>
                 A speaker accepts my request

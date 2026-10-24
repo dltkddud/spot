@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { localRecommendations } from "@/lib/recommend";
 import { useApp } from "@/lib/store";
 import { YourPeople } from "../Connections";
-import { HuddleCard } from "../Huddle";
 import { minutesUntil } from "@/lib/time";
 import { Avatar, Chip, PanelCard, PillButton, SectionTitle, StatusPill, ZoneBadge } from "../ui";
 import { ZoneMark } from "../ZoneIcon";
@@ -72,7 +71,8 @@ function LeavingBoard() {
   );
 }
 
-export function Discover() {
+// Explore → People: my connections, leaving soon, picks, and every speaker.
+export function ExplorePeople() {
   const { state, me, navigate, dispatch } = useApp();
   const [filter, setFilter] = useState<string>("All");
 
@@ -99,18 +99,9 @@ export function Discover() {
     navigate({ name: "panelDetail", panelId });
   };
 
-  const myHuddles = state.huddles.filter((h) => h.members.some((m) => m.userId === me.id));
-
   return (
-    <main className="px-5 pb-28 pt-5">
+    <div>
       <YourPeople />
-      {myHuddles.length > 0 && (
-        <div className="mb-4 space-y-3">
-          {myHuddles.map((h) => (
-            <HuddleCard key={h.id} huddle={h} />
-          ))}
-        </div>
-      )}
       <MyBar />
       <LeavingBoard />
 
@@ -165,6 +156,6 @@ export function Discover() {
           </p>
         )}
       </div>
-    </main>
+    </div>
   );
 }

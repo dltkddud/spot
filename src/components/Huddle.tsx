@@ -114,7 +114,7 @@ export function HuddleCard({ huddle, compact }: { huddle: Huddle; compact?: bool
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Button
               icon="users"
-              className="px-3 text-sm"
+              className="whitespace-nowrap px-3 text-sm"
               onClick={() => dispatch({ type: "huddleRespond", huddleId: huddle.id, accept: true })}
             >
               Huddle up

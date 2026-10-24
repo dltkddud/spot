@@ -39,13 +39,14 @@ export type Screen =
   | { name: "welcome" }
   | { name: "onboarding" }
   | { name: "zonePicker"; fromOnboarding?: boolean }
-  | { name: "discover" }
-  | { name: "zones" }
+  | { name: "explore"; view?: ExploreView }
   | { name: "zoneDetail"; zoneId: string }
   | { name: "panelDetail"; panelId: string }
   | { name: "requests" }
   | { name: "panelNow" }
   | { name: "me" };
+
+export type ExploreView = "people" | "map";
 
 export type ProfileInput = {
   name: string;
@@ -174,7 +175,7 @@ function initialState(now: number, myUserId: string | null): LocalState {
 }
 
 function homeFor(role: Role): Screen {
-  return role === "panel" ? { name: "panelNow" } : { name: "discover" };
+  return role === "panel" ? { name: "panelNow" } : { name: "explore" };
 }
 
 function addToast(state: LocalState, message: string): LocalState {

@@ -111,8 +111,8 @@ export function PanelDetail({ panelId }: { panelId: string }) {
         </section>
 
         <section className="mt-7 rounded-2xl border-2 border-primary bg-surface p-4">
-          {me.role === "panel" ? (
-            <p className="text-sm text-muted">Switch to an attendee profile to request a chat.</p>
+          {panel.id === me.id ? (
+            <p className="text-sm text-muted">This is you. People see this page when they look you up.</p>
           ) : mine?.status === "accepted" ? (
             <>
               <p className="text-lg font-extrabold">{first} is ready for you</p>
