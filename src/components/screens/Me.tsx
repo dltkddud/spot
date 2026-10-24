@@ -21,6 +21,8 @@ export function Me() {
 
   const count = (t: string) => state.activity.filter((a) => a.type === t).length;
   const missed = state.requests.filter((r) => r.status === "missed").length;
+  const huddlesFormed = state.stats.huddle_formed ?? 0;
+  const connectionsMade = state.stats.connection_made ?? 0;
   const stats = [
     { label: "Profile views", value: count("view_panel") },
     { label: "Chat requests", value: count("request_chat") },
@@ -28,6 +30,8 @@ export function Me() {
     { label: "Met", value: count("mark_met") },
     { label: "Missed", value: missed },
     { label: "Picks opened", value: count("click_recommendation") },
+    { label: "Huddles formed", value: huddlesFormed },
+    { label: "Connections made", value: connectionsMade },
   ];
 
   const demoId = (seedKey: string) => state.users.find((u) => u.seedKey === seedKey)?.id;
@@ -101,6 +105,25 @@ export function Me() {
             </span>
           </span>
         </label>
+        {me.role === "attendee" && (
+          <label className="mt-3 flex items-start gap-3 rounded-2xl border border-line bg-surface p-4">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={me.openToHuddles !== false}
+              onChange={() => dispatch({ type: "updateMe", patch: { openToHuddles: me.openToHuddles === false } })}
+              className="mt-1 h-5 w-5 accent-[var(--primary)]"
+            />
+            <span>
+              <span className="block font-bold">Open to huddles</span>
+              <span className="mt-0.5 block text-sm text-muted">
+                {me.openToHuddles !== false
+                  ? "We may suggest meeting a speaker together with people in the same line who share your interests."
+                  : "You won't get huddle suggestions."}
+              </span>
+            </span>
+          </label>
+        )}
         <p className="mt-3 text-sm text-muted">
           Your zone and status are deleted when {state.event.name} ends,{" "}
           <span className="whitespace-nowrap">{dayTime(state.event.endsAt)}</span>. Your
@@ -139,6 +162,9 @@ export function Me() {
             <div className="grid gap-2">
               <Button variant="secondary" onClick={() => dispatch({ type: "simulateAccept" })}>
                 A speaker accepts my request
+              </Button>
+              <Button variant="secondary" icon="users" onClick={() => dispatch({ type: "simulateHuddle" })}>
+                Someone in my line wants to huddle
               </Button>
               <Button variant="secondary" onClick={() => dispatch({ type: "simulateLeaving" })}>
                 A speaker I&apos;m waiting for leaves in 10 min

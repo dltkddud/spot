@@ -22,6 +22,7 @@ import type {
   ActivityType,
   ChatRequest,
   CrowdLevel,
+  Huddle,
   RequestStatus,
   EventInfo,
   Role,
@@ -73,6 +74,10 @@ type State = LocalState & {
   users: User[];
   requests: ChatRequest[];
   zoneActivity: Record<string, CrowdLevel>;
+  // My huddles as an attendee, and the formed huddles in my line as a speaker.
+  huddles: Huddle[];
+  // Event-wide counts kept on the server (huddles formed, connections made).
+  stats: Record<string, number>;
 };
 
 type Action =
@@ -85,6 +90,10 @@ type Action =
   | { type: "setLeaving"; minutes: number }
   | { type: "askStillHere"; userId: string }
   | { type: "confirmZone" }
+  | { type: "huddleRespond"; huddleId: string; accept: boolean }
+  | { type: "setHuddleStatus"; huddleId: string; status: "accepted" | "declined" | "met" | "missed" }
+  | { type: "stayConnected"; huddleId: string; otherId: string; yes: boolean }
+  | { type: "simulateHuddle" }
   | { type: "requestChat"; panelId: string; note: string }
   | { type: "setRequestStatus"; requestId: string; status: ChatRequest["status"] }
   | { type: "log"; activityType: ActivityType; targetId?: string }
@@ -243,6 +252,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setUserStatus = useMutation(api.users.setStatus);
   const askStillHere = useMutation(api.users.askStillHere);
   const confirmZone = useMutation(api.users.confirmZone);
+  const huddleRespond = useMutation(api.huddles.respond);
+  const setHuddleStatus = useMutation(api.huddles.setGroupStatus);
+  const stayConnected = useMutation(api.huddles.stayConnected);
+  const demoHuddle = useMutation(api.huddles.demoPropose);
   const createRequest = useMutation(api.chatRequests.create);
   const setRequestStatus = useMutation(api.chatRequests.setStatus);
 
@@ -265,6 +278,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const openLines = useLatest(useQuery(api.chatRequests.activeByEvent, eventId ? { eventId } : "skip"));
   const myLine = useLatest(useQuery(api.chatRequests.forPanel, viewerId ? { panelId: viewerId } : "skip"));
   const mySent = useLatest(useQuery(api.chatRequests.forAttendee, viewerId ? { attendeeId: viewerId } : "skip"));
+  const myHuddles = useLatest(useQuery(api.huddles.forAttendee, viewerId ? { attendeeId: viewerId } : "skip"));
+  const lineHuddles = useLatest(useQuery(api.huddles.forPanel, viewerId ? { panelId: viewerId } : "skip"));
+  const summary = useLatest(useQuery(api.activity.summary, eventId ? { eventId } : "skip"));
+  const stats = useMemo(() => summary ?? {}, [summary]);
 
   const event = useMemo<EventInfo | undefined>(
     () =>
@@ -293,7 +310,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const requests = useMemo<ChatRequest[]>(() => {
     const byId = new Map<string, ChatRequest>();
     for (const r of openLines ?? []) {
-      byId.set(r._id, { id: r._id, panelId: r.panelId, attendeeId: "", note: "", status: r.status, createdAt: r.createdAt });
+      byId.set(r._id, {
+        id: r._id,
+        panelId: r.panelId,
+        attendeeId: "",
+        note: "",
+        status: r.status,
+        createdAt: r.createdAt,
+        huddleId: r.huddleId,
+        lineAt: r.lineAt,
+      });
     }
     for (const r of [...(myLine ?? []), ...(mySent ?? [])]) {
       byId.set(r._id, {
@@ -305,10 +331,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         createdAt: r.createdAt,
         acceptedAt: r.acceptedAt,
         leaveWarnedFor: r.leaveWarnedFor,
+        huddleId: r.huddleId,
+        lineAt: r.lineAt,
       });
     }
     return [...byId.values()];
   }, [openLines, myLine, mySent]);
+
+  const huddles = useMemo<Huddle[]>(() => {
+    const byId = new Map<string, Huddle>();
+    for (const h of [...(lineHuddles ?? []), ...(myHuddles ?? [])]) byId.set(h._id, { ...h, id: h._id });
+    return [...byId.values()];
+  }, [lineHuddles, myHuddles]);
 
   // Restore my account from localStorage once users have loaded.
   useEffect(() => {
@@ -370,6 +404,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [viewerId, users, zones, mySent]);
 
+  // Banners for huddles: a new suggestion for me, and a huddle becoming ready.
+  const seenHuddles = useRef<{ viewerId: string; status: Map<string, string>; loaded: boolean } | null>(null);
+  useEffect(() => {
+    if (!viewerId || !users || !myHuddles) return;
+    if (myHuddles.some((h) => !h.members.some((m) => m.userId === viewerId))) return;
+    if (seenHuddles.current?.viewerId !== viewerId) {
+      seenHuddles.current = { viewerId, status: new Map(), loaded: false };
+    }
+    const seen = seenHuddles.current;
+    for (const h of myHuddles) {
+      const before = seen.status.get(h._id);
+      seen.status.set(h._id, h.status);
+      if (!seen.loaded) continue;
+      const panel = users.find((u) => u.id === h.panelId)?.name.split(" ")[0] ?? "the speaker";
+      const others = h.members
+        .filter((m) => m.userId !== viewerId)
+        .map((m) => users.find((u) => u.id === m.userId)?.name.split(" ")[0] ?? "Someone");
+      const mine = h.members.find((m) => m.userId === viewerId);
+      if (!before && h.status === "proposed" && mine?.response === "pending") {
+        localDispatch({
+          type: "toast",
+          message: `${others.join(" and ")} ${others.length > 1 ? "are" : "is"} into ${h.sharedInterests[0]} too. Meet ${panel} together?`,
+        });
+      } else if (before === "proposed" && h.status === "formed") {
+        localDispatch({ type: "toast", message: `Huddle ready. You'll meet ${panel} together.` });
+      }
+    }
+    seen.loaded = true;
+  }, [viewerId, users, myHuddles]);
+
   const creating = useRef(false);
 
   const dispatch = useCallback<Dispatch<Action>>(
@@ -396,8 +460,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         case "updateMe": {
           if (!meId) return;
-          const { zoneId, outfit, visible, requestsPaused } = action.patch;
-          run(updateUser({ id: meId, zoneId: zoneId as Id<"zones"> | undefined, outfit, visible, requestsPaused }));
+          const { zoneId, outfit, visible, requestsPaused, openToHuddles } = action.patch;
+          run(
+            updateUser({
+              id: meId,
+              zoneId: zoneId as Id<"zones"> | undefined,
+              outfit,
+              visible,
+              requestsPaused,
+              openToHuddles,
+            }),
+          );
           return;
         }
 
@@ -422,6 +495,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         case "confirmZone":
           if (meId) run(confirmZone({ id: meId }));
+          return;
+
+        case "huddleRespond":
+          if (meId) run(huddleRespond({ huddleId: action.huddleId as Id<"huddles">, userId: meId, accept: action.accept }));
+          return;
+
+        case "setHuddleStatus": {
+          if (!meId) return;
+          const activityType: ActivityType | null =
+            action.status === "accepted" ? "accept_request" : action.status === "met" ? "mark_met" : null;
+          run(
+            setHuddleStatus({ huddleId: action.huddleId as Id<"huddles">, actorId: meId, status: action.status }).then(
+              () => {
+                if (activityType) localDispatch({ type: "log", activityType, targetId: meId });
+              },
+            ),
+          );
+          return;
+        }
+
+        case "stayConnected":
+          if (!meId) return;
+          run(
+            stayConnected({
+              huddleId: action.huddleId as Id<"huddles">,
+              userId: meId,
+              otherId: action.otherId as Id<"users">,
+              yes: action.yes,
+            }),
+          );
+          return;
+
+        case "simulateHuddle":
+          if (meId) run(demoHuddle({ attendeeId: meId }));
           return;
 
         case "requestChat":
@@ -503,12 +610,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
           localDispatch(action);
       }
     },
-    [createUser, updateUser, setUserStatus, askStillHere, confirmZone, createRequest, setRequestStatus, resetDemo],
+    [
+      createUser,
+      updateUser,
+      setUserStatus,
+      askStillHere,
+      confirmZone,
+      huddleRespond,
+      setHuddleStatus,
+      stayConnected,
+      demoHuddle,
+      createRequest,
+      setRequestStatus,
+      resetDemo,
+    ],
   );
 
   const value = useMemo<AppContextValue | null>(() => {
     if (!event || !users) return null;
-    const state: State = { ...local, event, zones, users, requests, zoneActivity };
+    const state: State = { ...local, event, zones, users, requests, zoneActivity, huddles, stats };
     const me = users.find((u) => u.id === local.currentUserId);
     return {
       state,
@@ -518,7 +638,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       navigate: (screen, replace) => dispatch({ type: "navigate", screen, replace }),
       back: () => dispatch({ type: "back" }),
     };
-  }, [local, event, zones, users, requests, zoneActivity, dispatch]);
+  }, [local, event, zones, users, requests, zoneActivity, huddles, stats, dispatch]);
 
   if (!event || !users || !local.booted) return <div className="min-h-dvh bg-bg" />;
 
@@ -531,20 +651,29 @@ export function useApp() {
   return ctx;
 }
 
+const lineTime = (r: ChatRequest) => r.lineAt ?? r.createdAt;
+
+// A speaker's line in order: accepted first, then by place in line. Members of
+// a formed huddle share the place of whoever joined the line first.
 export function queueFor(requests: ChatRequest[], panelId: string) {
   return requests
     .filter((r) => r.panelId === panelId && (r.status === "waiting" || r.status === "accepted"))
     .sort((a, b) => {
       if (a.status !== b.status) return a.status === "accepted" ? -1 : 1;
-      return a.createdAt - b.createdAt;
+      return lineTime(a) - lineTime(b) || a.createdAt - b.createdAt;
     });
 }
 
+// "#2 in line", counting a huddle as one place.
 export function positionInQueue(requests: ChatRequest[], request: ChatRequest): number {
-  const waiting = requests
-    .filter((r) => r.panelId === request.panelId && r.status === "waiting")
-    .sort((a, b) => a.createdAt - b.createdAt);
-  return waiting.findIndex((r) => r.id === request.id) + 1;
+  const places = new Map<string, number>();
+  for (const r of requests) {
+    if (r.panelId !== request.panelId || r.status !== "waiting") continue;
+    const key = r.huddleId ?? r.id;
+    places.set(key, Math.min(places.get(key) ?? Infinity, lineTime(r)));
+  }
+  const order = [...places].sort((a, b) => a[1] - b[1]).map(([key]) => key);
+  return order.indexOf(request.huddleId ?? request.id) + 1;
 }
 
 export { homeFor };

@@ -3,6 +3,8 @@
 import { sharedInterests } from "@/lib/recommend";
 import { queueFor, useApp } from "@/lib/store";
 import { clockTime, minutesAgo, minutesUntil } from "@/lib/time";
+import type { ChatRequest, Huddle } from "@/lib/types";
+import { PanelHuddleCard } from "../Huddle";
 import { Avatar, Button, SectionTitle } from "../ui";
 import { MyBar } from "./Discover";
 
@@ -13,6 +15,23 @@ export function PanelNow() {
   const queue = queueFor(state.requests, me.id);
   const accepted = queue.filter((r) => r.status === "accepted");
   const waiting = queue.filter((r) => r.status === "waiting");
+  const formed = state.huddles.filter((h) => h.panelId === me.id && h.status === "formed");
+
+  // Each formed huddle shows once, in place of its members' requests.
+  type Place = { r: ChatRequest; huddle?: undefined } | { huddle: Huddle; requests: ChatRequest[] };
+  const places = (list: ChatRequest[]): Place[] => {
+    const out: Place[] = [];
+    const shown = new Set<string>();
+    for (const r of list) {
+      const huddle = formed.find((h) => h.id === r.huddleId);
+      if (!huddle) out.push({ r });
+      else if (!shown.has(huddle.id)) {
+        shown.add(huddle.id);
+        out.push({ huddle, requests: list.filter((x) => x.huddleId === huddle.id) });
+      }
+    }
+    return out;
+  };
 
   const bigButton =
     me.status === "available"
@@ -103,7 +122,9 @@ export function PanelNow() {
       )}
 
       <div className="space-y-3">
-        {accepted.map((r) => {
+        {places(accepted).map((p) => {
+          if (p.huddle) return <PanelHuddleCard key={p.huddle.id} huddle={p.huddle} requests={p.requests} />;
+          const r = p.r;
           const a = state.users.find((u) => u.id === r.attendeeId);
           if (!a) return null;
           return (
@@ -132,7 +153,11 @@ export function PanelNow() {
           );
         })}
 
-        {waiting.map((r, i) => {
+        {places(waiting).map((p, i) => {
+          if (p.huddle) {
+            return <PanelHuddleCard key={p.huddle.id} huddle={p.huddle} requests={p.requests} place={i + 1} />;
+          }
+          const r = p.r;
           const a = state.users.find((u) => u.id === r.attendeeId);
           if (!a) return null;
           const shared = sharedInterests(me, a);

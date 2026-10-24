@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import { EVENT_ENDS_AT, makeEvent, makeRequests, makeUsers, ZONES } from "../src/lib/mockData";
 import { scheduleEventEnd } from "./events";
 import { scheduleLeaving } from "./leaving";
+import { proposeFor } from "./huddles";
 
 // Makes the event's zones match mockData ZONES, matched by code so that
 // renaming a zone never breaks where people already said they are.
@@ -44,6 +45,73 @@ async function insertDemoRequests(
       panelId: userIds[panelId],
       attendeeId: userIds[attendeeId],
     });
+  }
+}
+
+// Suggests huddles in the demo speakers' lines. In each one, everyone but the
+// person who has waited longest has already said yes, so viewing as that
+// person (e.g. Lena in Dana's line) shows a suggestion one tap from ready.
+async function primeDemoHuddles(ctx: MutationCtx, userIds: Record<string, Id<"users">>) {
+  for (const [key, panelId] of Object.entries(userIds)) {
+    if (!key.startsWith("p-")) continue;
+    await proposeFor(ctx, panelId);
+    const proposed = await ctx.db
+      .query("huddles")
+      .withIndex("by_panel_and_status", (q) => q.eq("panelId", panelId).eq("status", "proposed"))
+      .take(20);
+    for (const h of proposed) {
+      const members = await ctx.db
+        .query("huddleMembers")
+        .withIndex("by_huddle", (q) => q.eq("huddleId", h._id))
+        .take(5);
+      const requests = await Promise.all(members.map((m) => ctx.db.get("chatRequests", m.requestId)));
+      const firstAt = Math.min(...requests.map((r) => r?.createdAt ?? Infinity));
+      for (const [i, m] of members.entries()) {
+        if (requests[i]?.createdAt !== firstAt) await ctx.db.patch("huddleMembers", m._id, { response: "yes" });
+      }
+    }
+  }
+}
+
+// Removes huddles and connections that involve demo people.
+async function clearDemoSocial(ctx: MutationCtx, demoIds: Set<Id<"users">>) {
+  const huddleIds = new Set<Id<"huddles">>();
+  for (const userId of demoIds) {
+    const asPanel = await ctx.db
+      .query("huddles")
+      .withIndex("by_panel_and_status", (q) => q.eq("panelId", userId))
+      .take(500);
+    asPanel.forEach((h) => huddleIds.add(h._id));
+    const asMember = await ctx.db
+      .query("huddleMembers")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .take(500);
+    asMember.forEach((m) => huddleIds.add(m.huddleId));
+
+    const links = await ctx.db
+      .query("connections")
+      .withIndex("by_user_and_other", (q) => q.eq("userId", userId))
+      .take(500);
+    for (const link of links) {
+      const back = await ctx.db
+        .query("connections")
+        .withIndex("by_user_and_other", (q) => q.eq("userId", link.otherId).eq("otherId", userId))
+        .unique();
+      if (back) await ctx.db.delete("connections", back._id);
+      await ctx.db.delete("connections", link._id);
+    }
+  }
+  for (const huddleId of huddleIds) {
+    const members = await ctx.db
+      .query("huddleMembers")
+      .withIndex("by_huddle", (q) => q.eq("huddleId", huddleId))
+      .take(5);
+    for (const m of members) {
+      const req = await ctx.db.get("chatRequests", m.requestId);
+      if (req?.huddleId === huddleId) await ctx.db.patch("chatRequests", req._id, { huddleId: undefined, lineAt: undefined });
+      await ctx.db.delete("huddleMembers", m._id);
+    }
+    await ctx.db.delete("huddles", huddleId);
   }
 }
 
@@ -94,14 +162,15 @@ export const ensure = mutation({
     const zoneIds = await syncZones(ctx, eventId);
     const userIds = await placeDemoPeople(ctx, eventId, zoneIds, now);
     await insertDemoRequests(ctx, eventId, userIds, now);
+    await primeDemoHuddles(ctx, userIds);
     await scheduleEventEnd(ctx, eventId);
     return eventId;
   },
 });
 
-// "Reset demo": puts the demo people and their requests back where mockData
-// starts them (adding demo people added to mockData later). Real sign-ups,
-// and requests between real sign-ups, are left alone.
+// "Reset demo": puts the demo people, their requests and their huddles back
+// where mockData starts them (adding demo people added to mockData later).
+// Real sign-ups, and requests/huddles between real sign-ups, are left alone.
 export const resetDemo = mutation({
   args: { eventId: v.id("events") },
   returns: v.null(),
@@ -110,6 +179,7 @@ export const resetDemo = mutation({
     const zoneIds = await syncZones(ctx, eventId);
     const userIds = await placeDemoPeople(ctx, eventId, zoneIds, now);
     const demoIds = new Set<Id<"users">>(Object.values(userIds));
+    await clearDemoSocial(ctx, demoIds);
 
     const requests = await ctx.db
       .query("chatRequests")
@@ -119,6 +189,7 @@ export const resetDemo = mutation({
       if (demoIds.has(r.panelId) || demoIds.has(r.attendeeId)) await ctx.db.delete("chatRequests", r._id);
     }
     await insertDemoRequests(ctx, eventId, userIds, now);
+    await primeDemoHuddles(ctx, userIds);
     return null;
   },
 });

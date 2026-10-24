@@ -35,6 +35,7 @@ export type User = {
   updatedAt: number;
   seedKey?: string;
   locationCheckAt?: number;
+  openToHuddles?: boolean;
 };
 
 // How busy a zone is. Counts hidden people too, so only a level is shared.
@@ -49,6 +50,26 @@ export type ChatRequest = {
   createdAt: number;
   acceptedAt?: number;
   leaveWarnedFor?: number;
+  // Set while part of a formed huddle; lineAt is where the whole huddle stands in line.
+  huddleId?: string;
+  lineAt?: number;
+};
+
+export type HuddleMember = {
+  userId: string;
+  requestId: string;
+  response: "pending" | "yes" | "no";
+};
+
+// Attendees in the same speaker's line who share interests and meet them together.
+export type Huddle = {
+  id: string;
+  panelId: string;
+  status: "proposed" | "formed" | "met";
+  sharedInterests: string[];
+  members: HuddleMember[];
+  // Other members I still need to answer "Stay connected?" for.
+  stayPending: string[];
 };
 
 export type ActivityType =
@@ -57,7 +78,10 @@ export type ActivityType =
   | "accept_request"
   | "mark_met"
   | "missed"
-  | "click_recommendation";
+  | "click_recommendation"
+  | "huddle_proposed"
+  | "huddle_formed"
+  | "connection_made";
 
 export type Activity = {
   id: string;

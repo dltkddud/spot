@@ -2,7 +2,7 @@
 
 import { useApp } from "@/lib/store";
 import { dayTime } from "@/lib/time";
-import { Button, Logo } from "../ui";
+import { Button, Icon, Logo } from "../ui";
 
 export function Welcome() {
   const { state, navigate } = useApp();
@@ -18,6 +18,10 @@ export function Welcome() {
       </h1>
       <p className="mt-4 max-w-[34ch] text-lg text-muted">
         See which zone people are in, whether they are free to talk, and get in line before they head out.
+      </p>
+      <p className="mt-3 flex max-w-[34ch] items-start gap-2 text-base font-semibold text-primary-ink">
+        <Icon name="users" size={20} />
+        Waiting in line? Spot matches you with people who care about the same things, so you meet the speaker together.
       </p>
 
       <div className="mt-10 rounded-2xl bg-board p-5 text-white">

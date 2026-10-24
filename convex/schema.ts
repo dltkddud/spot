@@ -41,6 +41,8 @@ export default defineSchema({
     seedKey: v.optional(v.string()),
     // Someone asked "Still here?" at this time and it hasn't been answered yet.
     locationCheckAt: v.optional(v.number()),
+    // false = never suggest huddles to me. Missing means yes.
+    openToHuddles: v.optional(v.boolean()),
   })
     .index("by_event", ["eventId"])
     .index("by_event_role", ["eventId", "role"]),
@@ -62,10 +64,52 @@ export default defineSchema({
     acceptedAt: v.optional(v.number()),
     // Set to the speaker's leavingAt once the 10-minute heads-up has gone out.
     leaveWarnedFor: v.optional(v.number()),
+    // While part of a formed huddle: the huddle, and the earliest createdAt
+    // among its members, which is where the whole huddle stands in line.
+    huddleId: v.optional(v.id("huddles")),
+    lineAt: v.optional(v.number()),
   })
     .index("by_panel_status", ["panelId", "status"])
     .index("by_attendee", ["attendeeId"])
     .index("by_event_and_status", ["eventId", "status"]),
+
+  // Attendees waiting for the same speaker who share interests, meeting them together.
+  huddles: defineTable({
+    eventId: v.id("events"),
+    panelId: v.id("users"),
+    status: v.union(
+      v.literal("proposed"), // waiting for everyone to say yes
+      v.literal("formed"), // everyone said yes; one place in line
+      v.literal("met"),
+      v.literal("declined"), // someone said "Not this time"
+      v.literal("dissolved"), // a member left the line or the speaker left
+    ),
+    sharedInterests: v.array(v.string()),
+    createdAt: v.number(),
+    formedAt: v.optional(v.number()),
+  }).index("by_panel_and_status", ["panelId", "status"]),
+
+  huddleMembers: defineTable({
+    huddleId: v.id("huddles"),
+    userId: v.id("users"),
+    requestId: v.id("chatRequests"),
+    response: v.union(v.literal("pending"), v.literal("yes"), v.literal("no")),
+    // After meeting: other members this person answered "Stay connected?" for, and said yes to.
+    stayAnswered: v.array(v.id("users")),
+    stayYes: v.array(v.id("users")),
+  })
+    .index("by_huddle", ["huddleId"])
+    .index("by_user", ["userId"])
+    .index("by_request", ["requestId"]),
+
+  // People who agreed to share their zone with each other. One row per direction.
+  connections: defineTable({
+    eventId: v.id("events"),
+    userId: v.id("users"),
+    otherId: v.id("users"),
+    source: v.union(v.literal("huddle"), v.literal("code"), v.literal("demo")),
+    createdAt: v.number(),
+  }).index("by_user_and_other", ["userId", "otherId"]),
 
   activity: defineTable({
     eventId: v.id("events"),
@@ -76,6 +120,9 @@ export default defineSchema({
       v.literal("mark_met"),
       v.literal("missed"),
       v.literal("click_recommendation"),
+      v.literal("huddle_proposed"),
+      v.literal("huddle_formed"),
+      v.literal("connection_made"),
     ),
     userId: v.id("users"),
     targetId: v.optional(v.id("users")),

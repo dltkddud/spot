@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { OUTFIT_WORD_LIMIT } from "../src/lib/mockData";
 import { STALE_AFTER_MIN } from "../src/lib/time";
 import { scheduleLeaving } from "./leaving";
+import { proposeFor } from "./huddles";
 import schema from "./schema";
 
 const MIN = 60_000;
@@ -46,7 +47,7 @@ export const create = mutation({
   },
 });
 
-// Zone, outfit, visibility and request pause. Only the fields passed are changed.
+// Zone, outfit, visibility, request pause and huddles. Only the fields passed are changed.
 export const update = mutation({
   args: {
     id: v.id("users"),
@@ -54,9 +55,10 @@ export const update = mutation({
     outfit: v.optional(v.string()),
     visible: v.optional(v.boolean()),
     requestsPaused: v.optional(v.boolean()),
+    openToHuddles: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, { id, zoneId, outfit, visible, requestsPaused }) => {
+  handler: async (ctx, { id, zoneId, outfit, visible, requestsPaused, openToHuddles }) => {
     const user = await ctx.db.get("users", id);
     if (!user) throw new ConvexError("User not found.");
     if (zoneId) {
@@ -68,8 +70,17 @@ export const update = mutation({
       ...(outfit !== undefined && { outfit: cleanOutfit(outfit) }),
       ...(visible !== undefined && { visible }),
       ...(requestsPaused !== undefined && { requestsPaused }),
+      ...(openToHuddles !== undefined && { openToHuddles }),
       updatedAt: Date.now(),
     });
+    // Turning huddles back on: look for matches in every line I'm waiting in.
+    if (openToHuddles && user.openToHuddles === false) {
+      const mine = await ctx.db
+        .query("chatRequests")
+        .withIndex("by_attendee", (q) => q.eq("attendeeId", id))
+        .take(200);
+      for (const r of mine) if (r.status === "waiting") await proposeFor(ctx, r.panelId);
+    }
     return null;
   },
 });

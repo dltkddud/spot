@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { positionInQueue, useApp } from "@/lib/store";
+import { HuddleCard, huddleForRequest } from "../Huddle";
 import { minutesAgo } from "@/lib/time";
 import type { ChatRequest } from "@/lib/types";
 import { Avatar, Button, Header, SectionTitle, StatusPill, ZoneBadge } from "../ui";
@@ -15,6 +16,7 @@ const pastLabel: Record<string, string> = {
 
 function Row({ r, children }: { r: ChatRequest; children?: ReactNode }) {
   const { state, navigate } = useApp();
+  const huddle = huddleForRequest(state.huddles, r);
   const p = state.users.find((u) => u.id === r.panelId);
   if (!p) return null;
   const zone = state.zones.find((z) => z.id === p.zoneId);
@@ -39,6 +41,11 @@ function Row({ r, children }: { r: ChatRequest; children?: ReactNode }) {
           )}
         </span>
       </button>
+      {huddle && (
+        <div className="mt-3">
+          <HuddleCard huddle={huddle} compact />
+        </div>
+      )}
       {children}
     </div>
   );

@@ -4,14 +4,14 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-23 (금) 22:45 PT
+마지막 업데이트: 2026-10-23 (금) 23:50 PT
 
 ---
 
 ## 0. 30초 요약
 
 - **무엇**: 행사장에서 대화하고 싶은 패널(발표자·프로덕트 제작자)을 놓치지 않게 돕는 실시간 네트워킹 웹앱 **Spot**
-- **어디까지**: 화면 전체 완성, 사용자·대화 요청·떠나기 알림·행사 종료 정리까지 Convex로 연결, Vercel 배포 완료 (Stage 0~3). 평면도·혼잡도·Still here?·파란색 디자인 적용
+- **어디까지**: 화면 전체 완성, 사용자·대화 요청·떠나기 알림·행사 종료 정리까지 Convex로 연결, Vercel 배포 완료 (Stage 0~3). 평면도·혼잡도·Still here?·파란색 디자인, **Huddle**(같은 줄의 관심사 겹치는 사람끼리 함께 만나기) 적용
 - **데모 주소**: https://spot-psi-two.vercel.app
 - 행사 종료 시각은 일 10/25 16:00 PT로 고정됨 (`EVENT_ENDS_AT`, 8-1 완료)
 - **그다음**: Stage 4 AI 추천 (Claude API 키 필요)
@@ -60,6 +60,7 @@ Anthropic 트랙은 Devpost 목록에 아직 없어서 Slack Anthropic 채널에
 6. 떠나기 10분 전 알림, 떠나는 시각에 남은 요청은 "놓침"으로
 7. 행사 종료 시 구역·상태 자동 삭제 (프로필은 유지)
 8. AI 추천: 관심사·상대 소개·상태·구역으로 지금 만나면 좋을 패널 3명과 이유 (Stage 4)
+9. **Huddle**: "줄을 서는 앱이 아니라 더 많은 연결을 만드는 앱". 같은 패널을 기다리는 참석자 중 관심사가 겹치는 사람(최대 3명)에게 함께 만나자고 제안. 모두 수락하면 가장 앞선 멤버의 순서로 합쳐지고, 패널은 묶음 카드 하나로 수락·만남 처리. 만난 뒤 "Stay connected?"에 서로 Yes면 연결(Connection)
 
 **원칙**: 동의한 사용자만 표시, 구역 단위로만, 자동 위치 추적·얼굴 인식 없음, 언제든 숨기기, 행사 종료 후 삭제
 
@@ -108,7 +109,10 @@ convex/
   schema.ts         표: events, zones, users, chatRequests, activity
   events.ts         current(행사+구역 읽기), zoneActivity(구역 혼잡도), scheduleEventEnd, endEvent(종료 시 정리)
   users.ts          create, update, setStatus, askStillHere, confirmZone, listByEvent
-  chatRequests.ts   create, setStatus, forPanel, forAttendee, activeByEvent
+  chatRequests.ts   create, setStatus, forPanel, forAttendee, activeByEvent (요청이 바뀌면 Huddle 매칭·해산 호출)
+  huddles.ts        proposeFor(매칭), afterRequestChange, dissolveAllFor, respond, setGroupStatus, stayConnected, demoPropose, forAttendee, forPanel
+  connections.ts    connect (양방향 연결 만들기)
+  activity.ts       record (서버 기록), summary (행사 전체 숫자)
   leaving.ts        scheduleLeaving, warn(10분 전), leave(떠나는 시각)
   seed.ts           ensure(처음 채우기), resetDemo(데모 초기화)
   _generated/       자동 생성. 직접 고치지 않음. GitHub에 같이 올림
@@ -120,6 +124,7 @@ src/
     App.tsx         ConvexProvider, 화면 전환
     ui.tsx          아이콘, 핀 로고·구역 배지, 혼잡도 배지, 버튼, 탭바, 알림 배너, Still here?
     FloorPlan.tsx   평면도 위 구역 핀(혼잡도 색), 구역 확대 보기, 범례, 구역 아이콘
+    Huddle.tsx      참석자용 Huddle 카드(제안·대기·완성·Stay connected), 패널용 묶음 카드
     screens/        Welcome, Onboarding, ZonePicker, Discover, Zones, PanelDetail,
                     MyRequests, PanelNow(패널 홈), Me(설정·지표·데모 컨트롤)
   lib/
@@ -148,13 +153,26 @@ src/
 | `chatRequests.forPanel` | query | 패널의 대기열 (메모 포함) |
 | `chatRequests.forAttendee` | query | 참석자 본인의 요청 전체 |
 | `chatRequests.activeByEvent` | query | 행사 전체의 열린 요청 (누가 했는지·메모 제외). 대기 인원·순서 계산용 |
-| `leaving.warn` / `leaving.leave` | internal | 떠나기 10분 전 표시 / 떠나는 시각에 요청 missed, 패널 숨김 |
+| `leaving.warn` / `leaving.leave` | internal | 떠나기 10분 전 표시 / 떠나는 시각에 Huddle 해산, 요청 missed, 패널 숨김 |
+| `huddles.respond` | mutation | "Huddle up" / "Not this time". 모두 Yes면 formed, 한 명이라도 No면 declined |
+| `huddles.setGroupStatus` | mutation | 패널이 Huddle 전체를 한 번에 수락/거절/만남/놓침 |
+| `huddles.stayConnected` | mutation | 만난 뒤 "Stay connected with …?" 서로 Yes면 연결 |
+| `huddles.demoPropose` | mutation | 데모 버튼. 내 줄에 관심사가 겹치는 예시 참석자를 넣고 제안 |
+| `huddles.forAttendee` / `forPanel` | query | 내 Huddle(제안·완성·연결 질문 대기) / 패널 줄의 완성된 Huddle |
+| `activity.summary` | query | 행사 전체 활동 숫자 (Me 화면 Huddles formed, Connections made) |
 | `events.endEvent` | internal | 종료 시각에 모두의 구역·상태·떠나는 시간 삭제 |
 | `seed.ensure` / `seed.resetDemo` | mutation | 처음 채우기(기존 행사는 종료 시각·구역 이름만 맞춤) / 데모 초기화(빠진 예시 사람 추가, 실제 가입자는 건드리지 않음) |
 
 **예약 작업 설계**: 떠나는 시간이나 종료 시각이 바뀌면 새로 예약하고, 예전 예약은 실행될 때 값이 다르면 아무것도 하지 않는다. Convex 대시보드 → Schedules에서 볼 수 있다.
 
 **알림**: 앱 화면 안 배너(Toast)만 쓴다. 폰 푸시 알림 없음.
+
+**Huddle 설계**
+- 표: `huddles`(패널, 상태 proposed/formed/met/declined/dissolved, 겹치는 관심사), `huddleMembers`(멤버별 요청 id, 응답, "Stay connected?" 답), `connections`(연결, 방향마다 한 줄).
+- 매칭(`proposeFor`)은 요청 생성·취소·거절, Huddle 거절, "Open to huddles" 켜기 때 서버가 다시 돌린다. 먼저 진행 중인 제안(3명 미만)에 합류시키고, 그다음 가장 오래 기다린 사람부터 관심사가 가장 많이 겹치는 사람과 묶는다. 같은 패널에서 이미 제안된 두 사람은 다시 묶지 않는다.
+- 완성되면 멤버 요청에 `huddleId`와 `lineAt`(가장 앞선 멤버의 요청 시각)이 붙고, 대기 순서는 Huddle을 한 자리로 계산한다(`store.tsx`의 `positionInQueue`).
+- 멤버가 취소되거나 거절·놓침되면, 또는 패널이 떠나면 해산되고 각자 원래 요청으로 돌아간다.
+- 제안에는 이름·한 줄 소개·겹치는 관심사·인상착의만 보이고, 메모는 패널만 본다.
 
 **디자인 토큰**: 색은 `globals.css`의 변수만 쓴다. 주요 버튼·강조 `primary`(파랑), 보조 `primary-soft`(연한 파랑), 붐비는 구역 `crowd`(주황), 한산 `quiet`(회색), 상태 3색(초록·빨강·노랑)은 그대로. 다크 모드에서는 평면도 이미지를 반전(`.floorplan-img`).
 
@@ -176,6 +194,10 @@ src/
 - [ ] Stage 5: 지표 기록 (8-3)
 - [x] 실제 구역 이름으로 바꾸기 (8-4) — Palace of Fine Arts 1층 평면도 기준 7개 구역
 - [x] 디자인 개선: 평면도 위치 선택, 구역 혼잡도, 구역별 사람 카드(좌우 넘김), Still here?, 파란색 테마·둥근 버튼·핀 로고
+- [x] Huddle: 같은 줄 관심사 매칭, 함께 수락·만남, Stay connected, Open to huddles, 데모 버튼
+- [ ] Connections: 연결 코드·초대 링크, 위치 공개 범위, Your people
+- [ ] 구역 아이콘 통일
+- [ ] 노트북용 휴대폰 화면 프레임
 - [ ] 폰 홈 화면 앱(PWA) (8-5)
 - [ ] Stage 6-1: 패널 쪽 3줄 브리핑 (8-6)
 - [ ] Stage 6-2: 놓쳤을 때 후속 메시지 (8-6)
@@ -323,6 +345,7 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 ## 9. 주의할 점
 
 - **Production과 Development는 데이터가 따로**다. 데모 주소에서 보이는 사람과 노트북에서 보이는 사람이 다른 게 정상.
+- **예시 사람은 Huddle에서 자동으로 Yes**: 실제 사용자가 낀 Huddle 제안과 "Stay connected?"에서 예시 사람은 버튼을 누를 수 없어 자동으로 Yes 처리된다. seed/Reset demo 직후에는 Dana의 줄에 Lena·Aisha(둘 다 Frontend) 제안이 있고 Aisha만 Yes 상태라, View as Lena로 바로 "Huddle up"을 보여줄 수 있다. Frontend 관심사로 가입해 Dana에게 요청하면 이 제안에 3번째로 합류한다.
 - **새 예시 참석자 6명**(Maya, Omar, Jin, Sara, Leo, Nina)은 기존 DB에는 자동으로 안 들어간다. Production에서 Me → Demo controls → **Reset demo**를 한 번 눌러야 추가되고, Atrium이 주황(Busy)으로 보인다. Jin·Sara·Nina는 위치 숨김 상태라 혼잡도에만 반영된다.
 - **예시 사람은 시간이 지나면 떠난다**: seed 직후 Priya는 8분 뒤, Ahmed는 25분 뒤 떠나도록 예약된다. 데모 전에 Me → Demo controls → **Reset demo**로 초기화.
 - **Vercel 배포가 "Blocked"**로 막히면 (무료 플랜 + Private 저장소 + 다른 사람 커밋) GitHub 저장소를 Public으로 바꾼다. 비밀값은 저장소에 없어서 안전하고, Devpost 제출 때도 공개가 필요하다.
@@ -364,3 +387,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/23 21:20 HANDOFF.md 작성
 - 10/23 22:15 8-1 행사 종료 시각 일 16:00 PT 고정, 시간 표시를 영어·태평양 시간으로
 - 10/23 22:45 디자인 개선 (평면도·혼잡도·사람 카드·Still here?·파란색 테마·핀 로고), 구역 이름 실제 평면도 기준으로, 예시 참석자 6명 추가
+- 10/23 23:50 Huddle (관심사 겹치는 대기자끼리 함께 만나기, 묶음 수락, Stay connected, 활동 숫자)

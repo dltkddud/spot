@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { LEAVE_WARNING_MIN } from "../src/lib/time";
+import { dissolveAllFor } from "./huddles";
 
 const MIN = 60_000;
 
@@ -44,12 +45,13 @@ export const warn = internalMutation({
   },
 });
 
-// At leavingAt: open requests become missed, the speaker is hidden and their zone cleared.
+// At leavingAt: huddles break up, open requests become missed, the speaker is hidden and their zone cleared.
 export const leave = internalMutation({
   args: { userId: v.id("users"), leavingAt: v.number() },
   returns: v.null(),
   handler: async (ctx, { userId, leavingAt }) => {
     if (!(await stillLeavingAt(ctx, userId, leavingAt))) return null;
+    await dissolveAllFor(ctx, userId);
     for (const r of await activeRequests(ctx, userId)) {
       await ctx.db.patch("chatRequests", r._id, { status: "missed" });
     }

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { localRecommendations } from "@/lib/recommend";
 import { useApp } from "@/lib/store";
+import { HuddleCard } from "../Huddle";
 import { minutesUntil } from "@/lib/time";
 import { Avatar, Chip, PanelCard, PillButton, PinMark, SectionTitle, StatusPill, ZoneBadge } from "../ui";
 
@@ -96,8 +97,17 @@ export function Discover() {
     navigate({ name: "panelDetail", panelId });
   };
 
+  const myHuddles = state.huddles.filter((h) => h.members.some((m) => m.userId === me.id));
+
   return (
     <main className="px-5 pb-28 pt-5">
+      {myHuddles.length > 0 && (
+        <div className="mb-4 space-y-3">
+          {myHuddles.map((h) => (
+            <HuddleCard key={h.id} huddle={h} />
+          ))}
+        </div>
+      )}
       <MyBar />
       <LeavingBoard />
 

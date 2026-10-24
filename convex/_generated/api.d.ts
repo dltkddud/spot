@@ -8,8 +8,11 @@
  * @module
  */
 
+import type * as activity from "../activity.js";
 import type * as chatRequests from "../chatRequests.js";
+import type * as connections from "../connections.js";
 import type * as events from "../events.js";
+import type * as huddles from "../huddles.js";
 import type * as leaving from "../leaving.js";
 import type * as seed from "../seed.js";
 import type * as users from "../users.js";
@@ -21,8 +24,11 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  activity: typeof activity;
   chatRequests: typeof chatRequests;
+  connections: typeof connections;
   events: typeof events;
+  huddles: typeof huddles;
   leaving: typeof leaving;
   seed: typeof seed;
   users: typeof users;

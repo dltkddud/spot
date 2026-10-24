@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { sharedInterests } from "@/lib/recommend";
 import { positionInQueue, queueFor, useApp } from "@/lib/store";
+import { HuddleCard, huddleForRequest } from "../Huddle";
 import { isStale, minutesAgo, minutesUntil } from "@/lib/time";
 import { Avatar, Button, Header, inputClass, StatusPill, StillHereAsk, ZoneBadge } from "../ui";
 
@@ -136,6 +137,11 @@ export function PanelDetail({ panelId }: { panelId: string }) {
               <p className="text-xs font-semibold text-muted">You&apos;re in line</p>
               <p className="mt-1 text-3xl font-black">#{positionInQueue(state.requests, mine)}</p>
               {mine.note && <p className="mt-2 text-sm">&ldquo;{mine.note}&rdquo;</p>}
+              {huddleForRequest(state.huddles, mine) && (
+                <div className="mt-3">
+                  <HuddleCard huddle={huddleForRequest(state.huddles, mine)!} compact />
+                </div>
+              )}
               <p className="mt-2 text-sm text-muted">
                 We&apos;ll let you know when {first} accepts, or if they&apos;re about to leave.
               </p>

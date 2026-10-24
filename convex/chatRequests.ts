@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema";
+import { afterRequestChange, proposeFor } from "./huddles";
 import { LEAVE_WARNING_MIN } from "../src/lib/time";
 
 const MIN = 60_000;
@@ -50,7 +51,7 @@ export const create = mutation({
     const leavingSoon =
       panel.status === "leaving" && panel.leavingAt !== undefined && panel.leavingAt - now <= LEAVE_WARNING_MIN * MIN;
 
-    return await ctx.db.insert("chatRequests", {
+    const id = await ctx.db.insert("chatRequests", {
       eventId: panel.eventId,
       panelId,
       attendeeId,
@@ -59,6 +60,8 @@ export const create = mutation({
       createdAt: now,
       ...(leavingSoon && { leaveWarnedFor: panel.leavingAt }),
     });
+    await proposeFor(ctx, panelId);
+    return id;
   },
 });
 
@@ -98,6 +101,7 @@ export const setStatus = mutation({
       status,
       ...(status === "accepted" && { acceptedAt: Date.now() }),
     });
+    await afterRequestChange(ctx, requestId);
     return null;
   },
 });
@@ -122,7 +126,7 @@ export const forAttendee = query({
 });
 
 // Every open line at the event, without who is in it or their notes.
-// Used for "N people waiting" and "You're #2 in line".
+// Used for "N people waiting" and "You're #2 in line" (a huddle counts once).
 export const activeByEvent = query({
   args: { eventId: v.id("events") },
   returns: v.array(
@@ -131,6 +135,8 @@ export const activeByEvent = query({
       panelId: v.id("users"),
       status: v.union(v.literal("waiting"), v.literal("accepted")),
       createdAt: v.number(),
+      huddleId: v.optional(v.id("huddles")),
+      lineAt: v.optional(v.number()),
     }),
   ),
   handler: async (ctx, { eventId }) => {
@@ -140,7 +146,16 @@ export const activeByEvent = query({
         .query("chatRequests")
         .withIndex("by_event_and_status", (q) => q.eq("eventId", eventId).eq("status", status))
         .take(1000);
-      rows.push(...batch.map((r) => ({ _id: r._id, panelId: r.panelId, status, createdAt: r.createdAt })));
+      rows.push(
+        ...batch.map((r) => ({
+          _id: r._id,
+          panelId: r.panelId,
+          status,
+          createdAt: r.createdAt,
+          huddleId: r.huddleId,
+          lineAt: r.lineAt,
+        })),
+      );
     }
     return rows;
   },
