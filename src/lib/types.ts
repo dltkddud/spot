@@ -34,7 +34,11 @@ export type User = {
   requestsPaused: boolean;
   updatedAt: number;
   seedKey?: string;
+  locationCheckAt?: number;
 };
+
+// How busy a zone is. Counts hidden people too, so only a level is shared.
+export type CrowdLevel = "quiet" | "some" | "busy";
 
 export type ChatRequest = {
   id: string;

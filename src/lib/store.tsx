@@ -21,6 +21,7 @@ import type {
   Activity,
   ActivityType,
   ChatRequest,
+  CrowdLevel,
   RequestStatus,
   EventInfo,
   Role,
@@ -71,6 +72,7 @@ type State = LocalState & {
   zones: Zone[];
   users: User[];
   requests: ChatRequest[];
+  zoneActivity: Record<string, CrowdLevel>;
 };
 
 type Action =
@@ -81,6 +83,8 @@ type Action =
   | { type: "updateMe"; patch: Partial<User> }
   | { type: "setStatus"; status: Exclude<Status, "leaving"> }
   | { type: "setLeaving"; minutes: number }
+  | { type: "askStillHere"; userId: string }
+  | { type: "confirmZone" }
   | { type: "requestChat"; panelId: string; note: string }
   | { type: "setRequestStatus"; requestId: string; status: ChatRequest["status"] }
   | { type: "log"; activityType: ActivityType; targetId?: string }
@@ -237,6 +241,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const createUser = useMutation(api.users.create);
   const updateUser = useMutation(api.users.update);
   const setUserStatus = useMutation(api.users.setStatus);
+  const askStillHere = useMutation(api.users.askStillHere);
+  const confirmZone = useMutation(api.users.confirmZone);
   const createRequest = useMutation(api.chatRequests.create);
   const setRequestStatus = useMutation(api.chatRequests.setStatus);
 
@@ -251,6 +257,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const viewerId = local.booted ? (local.currentUserId as Id<"users"> | null) : null;
+  const crowd = useLatest(useQuery(api.events.zoneActivity, eventId ? { eventId } : "skip"));
+  const zoneActivity = useMemo<Record<string, CrowdLevel>>(
+    () => Object.fromEntries((crowd ?? []).map((z) => [z.zoneId, z.level])),
+    [crowd],
+  );
   const openLines = useLatest(useQuery(api.chatRequests.activeByEvent, eventId ? { eventId } : "skip"));
   const myLine = useLatest(useQuery(api.chatRequests.forPanel, viewerId ? { panelId: viewerId } : "skip"));
   const mySent = useLatest(useQuery(api.chatRequests.forAttendee, viewerId ? { attendeeId: viewerId } : "skip"));
@@ -398,6 +409,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (meId) run(setUserStatus({ id: meId, status: "leaving", leavingInMin: action.minutes }));
           return;
 
+        case "askStillHere": {
+          const target = users.find((u) => u.id === action.userId);
+          if (!target) return;
+          run(
+            askStillHere({ targetId: target.id as Id<"users"> }).then(() =>
+              localDispatch({ type: "toast", message: `We asked ${target.name.split(" ")[0]} to confirm their zone.` }),
+            ),
+          );
+          return;
+        }
+
+        case "confirmZone":
+          if (meId) run(confirmZone({ id: meId }));
+          return;
+
         case "requestChat":
           if (!meId) return;
           run(
@@ -477,12 +503,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           localDispatch(action);
       }
     },
-    [createUser, updateUser, setUserStatus, createRequest, setRequestStatus, resetDemo],
+    [createUser, updateUser, setUserStatus, askStillHere, confirmZone, createRequest, setRequestStatus, resetDemo],
   );
 
   const value = useMemo<AppContextValue | null>(() => {
     if (!event || !users) return null;
-    const state: State = { ...local, event, zones, users, requests };
+    const state: State = { ...local, event, zones, users, requests, zoneActivity };
     const me = users.find((u) => u.id === local.currentUserId);
     return {
       state,
@@ -492,7 +518,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       navigate: (screen, replace) => dispatch({ type: "navigate", screen, replace }),
       back: () => dispatch({ type: "back" }),
     };
-  }, [local, event, zones, users, requests, dispatch]);
+  }, [local, event, zones, users, requests, zoneActivity, dispatch]);
 
   if (!event || !users || !local.booted) return <div className="min-h-dvh bg-bg" />;
 

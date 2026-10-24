@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { sharedInterests } from "@/lib/recommend";
 import { positionInQueue, queueFor, useApp } from "@/lib/store";
 import { isStale, minutesAgo, minutesUntil } from "@/lib/time";
-import { Avatar, Button, Header, inputClass, StatusPill, ZoneBadge } from "../ui";
+import { Avatar, Button, Header, inputClass, StatusPill, StillHereAsk, ZoneBadge } from "../ui";
 
 export function PanelDetail({ panelId }: { panelId: string }) {
   const { state, me, dispatch, back } = useApp();
@@ -79,9 +79,12 @@ export function PanelDetail({ panelId }: { panelId: string }) {
             <p className="mt-0.5 text-lg font-extrabold">{panel.outfit}</p>
           </div>
           {stale && (
-            <p className="mt-3 text-sm text-busy-ink">
-              This hasn&apos;t been updated in a while, so {first} may have moved.
-            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-busy-ink">
+                This hasn&apos;t been updated in a while, so {first} may have moved.
+              </p>
+              <StillHereAsk user={panel} />
+            </div>
           )}
         </section>
 
@@ -99,7 +102,7 @@ export function PanelDetail({ panelId }: { panelId: string }) {
               <span
                 key={i}
                 className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
-                  shared.includes(i) ? "bg-ink text-surface" : "border border-line bg-surface"
+                  shared.includes(i) ? "bg-primary text-on-primary" : "border border-line bg-surface"
                 }`}
               >
                 {i}
@@ -109,7 +112,7 @@ export function PanelDetail({ panelId }: { panelId: string }) {
           {shared.length > 0 && <p className="mt-2 text-xs text-muted">Dark ones are interests you share.</p>}
         </section>
 
-        <section className="mt-7 rounded-2xl border-2 border-ink bg-surface p-4">
+        <section className="mt-7 rounded-2xl border-2 border-primary bg-surface p-4">
           {me.role === "panel" ? (
             <p className="text-sm text-muted">Switch to an attendee profile to request a chat.</p>
           ) : mine?.status === "accepted" ? (
@@ -120,6 +123,7 @@ export function PanelDetail({ panelId }: { panelId: string }) {
               </p>
               <Button
                 variant="go"
+                icon="check"
                 block
                 className="mt-4"
                 onClick={() => dispatch({ type: "setRequestStatus", requestId: mine.id, status: "met" })}
@@ -137,6 +141,7 @@ export function PanelDetail({ panelId }: { panelId: string }) {
               </p>
               <Button
                 variant="secondary"
+                icon="x"
                 block
                 className="mt-4"
                 onClick={() => dispatch({ type: "setRequestStatus", requestId: mine.id, status: "cancelled" })}
@@ -167,6 +172,7 @@ export function PanelDetail({ panelId }: { panelId: string }) {
               />
               <Button
                 block
+                icon="chat"
                 className="mt-3"
                 onClick={() => {
                   dispatch({ type: "requestChat", panelId: panel.id, note });

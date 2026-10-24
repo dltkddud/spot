@@ -61,14 +61,14 @@ export function Onboarding() {
                 onClick={() => setRole(opt.value)}
                 aria-pressed={role === opt.value}
                 className={`w-full rounded-2xl border-2 p-5 text-left transition ${
-                  role === opt.value ? "border-ink bg-surface" : "border-line bg-surface"
+                  role === opt.value ? "border-primary bg-primary-soft" : "border-line bg-surface hover:border-primary/50"
                 }`}
               >
                 <span className="flex items-center justify-between">
                   <span className="text-lg font-extrabold">{opt.title}</span>
                   <span
                     className={`grid h-6 w-6 place-items-center rounded-full border-2 ${
-                      role === opt.value ? "border-ink bg-ink" : "border-line"
+                      role === opt.value ? "border-primary bg-primary" : "border-line"
                     }`}
                   >
                     {role === opt.value && <span className="h-2 w-2 rounded-full bg-surface" />}
@@ -79,7 +79,7 @@ export function Onboarding() {
             ))}
           </div>
 
-          <Button block className="mt-8" disabled={!role} onClick={() => setStep(2)}>
+          <Button block icon="arrow" className="mt-8" disabled={!role} onClick={() => setStep(2)}>
             Continue
           </Button>
         </main>
@@ -176,6 +176,7 @@ export function Onboarding() {
 
         <Button
           block
+          icon="pin"
           disabled={!canFinish}
           onClick={() =>
             role &&

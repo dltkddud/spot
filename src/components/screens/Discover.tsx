@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { localRecommendations } from "@/lib/recommend";
 import { useApp } from "@/lib/store";
 import { minutesUntil } from "@/lib/time";
-import { Avatar, Chip, PanelCard, SectionTitle, StatusPill, ZoneBadge } from "../ui";
+import { Avatar, Chip, PanelCard, PillButton, PinMark, SectionTitle, StatusPill, ZoneBadge } from "../ui";
 
 export function MyBar() {
   const { state, me, navigate } = useApp();
@@ -18,12 +18,9 @@ export function MyBar() {
           <ZoneBadge zone={zone} />
         </div>
       </div>
-      <button
-        onClick={() => navigate({ name: "zonePicker" })}
-        className="shrink-0 rounded-full border border-line px-3.5 py-2 text-sm font-bold"
-      >
+      <PillButton icon="pin" onClick={() => navigate({ name: "zonePicker" })}>
         I moved
-      </button>
+      </PillButton>
     </div>
   );
 }
@@ -52,9 +49,7 @@ function LeavingBoard() {
                 onClick={() => navigate({ name: "panelDetail", panelId: p.id })}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
               >
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-white/10 text-base font-black">
-                  {zone?.code ?? "?"}
-                </span>
+                <PinMark size={32}>{zone?.code ?? "?"}</PinMark>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-bold">{p.name}</span>
                   <span className="block truncate text-xs text-board-dim">
@@ -120,7 +115,7 @@ export function Discover() {
               <button
                 key={r.panelId}
                 onClick={() => open(p.id, true)}
-                className="w-full rounded-2xl border-2 border-ink bg-surface p-4 text-left"
+                className="w-full rounded-2xl border-2 border-primary bg-surface p-4 text-left transition duration-150 hover:shadow-md active:scale-[0.99]"
               >
                 <span className="flex items-center gap-3">
                   <Avatar user={p} size={40} />

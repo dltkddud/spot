@@ -3,7 +3,100 @@
 import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { queueFor, useApp, type Screen } from "@/lib/store";
 import { isStale, minutesAgo, minutesUntil } from "@/lib/time";
-import type { Status, User, Zone } from "@/lib/types";
+import type { CrowdLevel, Status, User, Zone } from "@/lib/types";
+
+const iconPaths = {
+  arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
+  pin: (
+    <>
+      <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+    </>
+  ),
+  chat: <path d="M5 5h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-8l-5 4v-4H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" />,
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  x: <path d="M6 6l12 12M18 6L6 18" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </>
+  ),
+  refresh: <path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" />,
+  hand: <path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5V4a1.5 1.5 0 0 1 3 0v7m0-5.5a1.5 1.5 0 0 1 3 0V12m0-3.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.6-2.2L4.2 15a1.6 1.6 0 0 1 2.5-2L8 14.5" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4l2.5 2.5" />
+    </>
+  ),
+};
+
+export type IconName = keyof typeof iconPaths;
+
+export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="shrink-0"
+    >
+      {iconPaths[name]}
+    </svg>
+  );
+}
+
+// The Spot pin: a map pin that connects people and places.
+export function PinMark({ size = 32, children }: { size?: number; children?: ReactNode }) {
+  return (
+    <span className="relative inline-grid shrink-0 place-items-center" style={{ width: size * 0.8, height: size }}>
+      <svg width={size * 0.8} height={size} viewBox="0 0 24 30" aria-hidden className="absolute inset-0">
+        <path d="M12 29s-11-9.4-11-17.2C1 5.6 5.9 1 12 1s11 4.6 11 10.8C23 19.6 12 29 12 29z" fill="var(--primary)" />
+        {!children && <circle cx="12" cy="11.5" r="4.2" fill="var(--on-primary)" />}
+      </svg>
+      {children && (
+        <span
+          className="relative font-black leading-none text-on-primary"
+          style={{ fontSize: size * 0.42, marginTop: -size * 0.16 }}
+        >
+          {children}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function Logo({ size = "sm" }: { size?: "sm" | "lg" }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <PinMark size={size === "lg" ? 40 : 28} />
+      <span className={`font-black tracking-tight ${size === "lg" ? "text-3xl" : "text-lg"}`}>Spot</span>
+    </span>
+  );
+}
+
+const crowdStyles: Record<CrowdLevel, { label: string; cls: string; dot: string }> = {
+  busy: { label: "Busy", cls: "bg-crowd-soft text-crowd-ink", dot: "bg-crowd" },
+  some: { label: "Some people", cls: "bg-primary-soft text-primary-ink", dot: "bg-primary" },
+  quiet: { label: "Quiet", cls: "bg-quiet-soft text-muted", dot: "bg-quiet" },
+};
+
+export function CrowdBadge({ level }: { level: CrowdLevel }) {
+  const s = crowdStyles[level];
+  return (
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${s.cls}`}>
+      <span className={`h-2 w-2 rounded-full ${s.dot}`} aria-hidden />
+      {s.label}
+    </span>
+  );
+}
 
 export function statusLabel(status: Status, leavingAt: number | undefined, now: number) {
   if (status === "available") return "Free to talk";
@@ -37,10 +130,9 @@ export function StatusPill({ user, now }: { user: User; now: number }) {
 
 export function ZoneBadge({ zone, size = "sm" }: { zone?: Zone; size?: "sm" | "lg" }) {
   if (!zone) return <span className="text-sm text-muted">No zone set</span>;
-  const box = size === "lg" ? "h-12 w-12 text-2xl rounded-lg" : "h-6 w-6 text-sm rounded-[5px]";
   return (
-    <span className="inline-flex items-center gap-2">
-      <span className={`grid place-items-center bg-ink font-extrabold text-surface ${box}`}>{zone.code}</span>
+    <span className="inline-flex items-center gap-1.5">
+      <PinMark size={size === "lg" ? 48 : 24}>{zone.code}</PinMark>
       <span className={size === "lg" ? "text-lg font-bold" : "text-sm font-semibold"}>{zone.name}</span>
     </span>
   );
@@ -69,21 +161,42 @@ export function Avatar({ user, size = 44 }: { user: User; size?: number }) {
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "go" | "busy";
   block?: boolean;
+  icon?: IconName;
 };
 
-export function Button({ variant = "primary", block, className = "", ...props }: ButtonProps) {
+export function Button({ variant = "primary", block, icon, className = "", children, ...props }: ButtonProps) {
   const styles = {
-    primary: "bg-ink text-surface",
-    secondary: "border border-line bg-surface text-ink",
-    ghost: "text-ink underline-offset-4 hover:underline",
-    go: "bg-go text-white",
-    busy: "bg-busy text-white",
+    primary: "bg-primary text-on-primary shadow-sm shadow-primary/25 hover:bg-primary-hover hover:shadow-md hover:shadow-primary/30",
+    secondary: "bg-primary-soft text-primary-ink hover:bg-primary-soft-hover",
+    ghost: "text-primary-ink hover:bg-primary-soft",
+    go: "bg-go text-white shadow-sm shadow-go/25 hover:brightness-110 hover:shadow-md",
+    busy: "bg-busy text-white shadow-sm shadow-busy/25 hover:brightness-110 hover:shadow-md",
   }[variant];
   return (
     <button
       {...props}
-      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-5 text-base font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${styles} ${block ? "w-full" : ""} ${className}`}
-    />
+      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 text-base font-bold transition duration-150 ease-out active:translate-y-px active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 ${styles} ${block ? "w-full" : ""} ${className}`}
+    >
+      {icon && <Icon name={icon} />}
+      {children}
+    </button>
+  );
+}
+
+// Small rounded action, e.g. "I moved" or "Still here?".
+export function PillButton({
+  icon,
+  className = "",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: IconName }) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary-soft px-3.5 py-2 text-sm font-bold text-primary-ink transition duration-150 hover:bg-primary-soft-hover active:scale-[0.96] disabled:opacity-50 ${className}`}
+    >
+      {icon && <Icon name={icon} size={16} />}
+      {props.children}
+    </button>
   );
 }
 
@@ -101,8 +214,10 @@ export function Chip({
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-semibold transition ${
-        selected ? "border-ink bg-ink text-surface" : "border-line bg-surface text-ink"
+      className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-semibold transition duration-150 active:scale-[0.96] ${
+        selected
+          ? "border-primary bg-primary text-on-primary"
+          : "border-line bg-surface text-ink hover:border-primary/50 hover:bg-primary-soft"
       }`}
     >
       {children}
@@ -121,7 +236,7 @@ export function Field({ label, hint, children }: { label: string; hint?: ReactNo
 }
 
 export const inputClass =
-  "w-full rounded-xl border border-line bg-surface px-4 py-3 text-base text-ink placeholder:text-muted/70 focus:border-ink focus:outline-none";
+  "w-full rounded-xl border border-line bg-surface px-4 py-3 text-base text-ink placeholder:text-muted/70 focus:border-primary focus:outline-none";
 
 export function Header({ title, onBack, right }: { title: string; onBack?: () => void; right?: ReactNode }) {
   return (
@@ -194,10 +309,8 @@ const icons = {
   ),
   zones: (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="8" height="8" rx="1.5" />
-      <rect x="13" y="3" width="8" height="8" rx="1.5" />
-      <rect x="3" y="13" width="8" height="8" rx="1.5" />
-      <rect x="13" y="13" width="8" height="8" rx="1.5" />
+      <path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5L9 4z" />
+      <path d="M9 4v13.5M15 6.5V20" />
     </svg>
   ),
   requests: (
@@ -252,7 +365,7 @@ export function TabBar() {
               key={t.label}
               onClick={() => dispatch({ type: "resetTo", screen: t.screen })}
               className={`relative flex flex-1 flex-col items-center gap-0.5 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 text-[11px] font-bold ${
-                active ? "text-ink" : "text-muted"
+                active ? "text-primary" : "text-muted"
               }`}
               aria-current={active ? "page" : undefined}
             >
@@ -301,5 +414,51 @@ export function Toasts() {
         </div>
       ))}
     </div>
+  );
+}
+
+// Shown to me when someone asked whether I'm still in my zone.
+export function StillHerePrompt() {
+  const { state, me, dispatch, navigate } = useApp();
+  if (!me?.locationCheckAt || !me.zoneId) return null;
+  const zone = state.zones.find((z) => z.id === me.zoneId);
+  return (
+    <section className="mx-5 mt-4 rounded-2xl border border-primary/30 bg-primary-soft p-4">
+      <p className="flex items-center gap-2 font-extrabold text-primary-ink">
+        <Icon name="pin" />
+        Are you still at {zone?.name ?? "your zone"}?
+      </p>
+      <p className="mt-1 text-sm text-muted">
+        Someone is looking for you. Your last update was {minutesAgo(me.updatedAt, state.now)}.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Button icon="check" className="px-3 text-sm" onClick={() => dispatch({ type: "confirmZone" })}>
+          Yes, I&apos;m still here
+        </Button>
+        <Button variant="secondary" icon="pin" className="px-3 text-sm" onClick={() => navigate({ name: "zonePicker" })}>
+          I moved
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+// "Still here?" for someone whose zone hasn't been updated in 15+ minutes.
+export function StillHereAsk({ user }: { user: User }) {
+  const { state, me, dispatch } = useApp();
+  if (!user.zoneId || user.id === me?.id || !isStale(user.updatedAt, state.now)) return null;
+  const first = user.name.split(" ")[0];
+  if (user.locationCheckAt && user.locationCheckAt > user.updatedAt) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
+        <Icon name="clock" size={14} />
+        Asked {first} to confirm
+      </span>
+    );
+  }
+  return (
+    <PillButton icon="hand" onClick={() => dispatch({ type: "askStillHere", userId: user.id })}>
+      Still here?
+    </PillButton>
   );
 }

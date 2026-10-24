@@ -4,7 +4,7 @@ import { useState } from "react";
 import { OUTFIT_WORD_LIMIT } from "@/lib/mockData";
 import { useApp } from "@/lib/store";
 import { dayTime } from "@/lib/time";
-import { Avatar, Button, Header, inputClass, SectionTitle, StatusPill, ZoneBadge } from "../ui";
+import { Avatar, Button, Header, inputClass, PillButton, SectionTitle, StatusPill, ZoneBadge } from "../ui";
 
 function wordCount(s: string) {
   return s.trim() ? s.trim().split(/\s+/).length : 0;
@@ -66,18 +66,16 @@ export function Me() {
         <SectionTitle>Where you are</SectionTitle>
         <div className="flex items-center justify-between rounded-2xl border border-line bg-surface p-4">
           <ZoneBadge zone={zone} />
-          <button
-            onClick={() => navigate({ name: "zonePicker" })}
-            className="rounded-full border border-line px-3.5 py-2 text-sm font-bold"
-          >
+          <PillButton icon="pin" onClick={() => navigate({ name: "zonePicker" })}>
             Change zone
-          </button>
+          </PillButton>
         </div>
 
         <SectionTitle aside={`${words}/${OUTFIT_WORD_LIMIT} words`}>What you&apos;re wearing</SectionTitle>
         <div className="flex gap-2">
           <input className={inputClass} value={outfit} onChange={(e) => setOutfit(e.target.value)} />
           <Button
+            icon="check"
             disabled={!outfitChanged || words === 0 || words > OUTFIT_WORD_LIMIT}
             onClick={() => dispatch({ type: "updateMe", patch: { outfit: outfit.trim() } })}
           >
@@ -104,7 +102,8 @@ export function Me() {
           </span>
         </label>
         <p className="mt-3 text-sm text-muted">
-          Your zone and status are deleted when {state.event.name} ends, {dayTime(state.event.endsAt)}. Your
+          Your zone and status are deleted when {state.event.name} ends,{" "}
+          <span className="whitespace-nowrap">{dayTime(state.event.endsAt)}</span>. Your
           basic profile stays so you can use it at the next event.
         </p>
 
@@ -128,7 +127,7 @@ export function Me() {
                   key={o.id}
                   onClick={() => dispatch({ type: "viewAs", userId: o.id })}
                   className={`rounded-full border px-3.5 py-2 text-sm font-bold ${
-                    state.currentUserId === o.id ? "border-ink bg-ink text-surface" : "border-line bg-surface"
+                    state.currentUserId === o.id ? "border-primary bg-primary text-on-primary" : "border-line bg-surface hover:bg-primary-soft"
                   }`}
                 >
                   {o.label}
@@ -146,7 +145,7 @@ export function Me() {
               </Button>
             </div>
           )}
-          <Button variant="ghost" block onClick={() => dispatch({ type: "reset", now: Date.now() })}>
+          <Button variant="ghost" icon="refresh" block onClick={() => dispatch({ type: "reset", now: Date.now() })}>
             Reset demo
           </Button>
         </div>

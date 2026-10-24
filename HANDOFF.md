@@ -4,14 +4,14 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-23 (금) 22:15 PT
+마지막 업데이트: 2026-10-23 (금) 22:45 PT
 
 ---
 
 ## 0. 30초 요약
 
 - **무엇**: 행사장에서 대화하고 싶은 패널(발표자·프로덕트 제작자)을 놓치지 않게 돕는 실시간 네트워킹 웹앱 **Spot**
-- **어디까지**: 화면 전체 완성, 사용자·대화 요청·떠나기 알림·행사 종료 정리까지 Convex로 연결, Vercel 배포 완료 (Stage 0~3)
+- **어디까지**: 화면 전체 완성, 사용자·대화 요청·떠나기 알림·행사 종료 정리까지 Convex로 연결, Vercel 배포 완료 (Stage 0~3). 평면도·혼잡도·Still here?·파란색 디자인 적용
 - **데모 주소**: https://spot-psi-two.vercel.app
 - 행사 종료 시각은 일 10/25 16:00 PT로 고정됨 (`EVENT_ENDS_AT`, 8-1 완료)
 - **그다음**: Stage 4 AI 추천 (Claude API 키 필요)
@@ -106,8 +106,8 @@ Anthropic 트랙은 Devpost 목록에 아직 없어서 Slack Anthropic 채널에
 ```
 convex/
   schema.ts         표: events, zones, users, chatRequests, activity
-  events.ts         current(행사+구역 읽기), scheduleEventEnd, endEvent(종료 시 정리)
-  users.ts          create, update, setStatus, listByEvent
+  events.ts         current(행사+구역 읽기), zoneActivity(구역 혼잡도), scheduleEventEnd, endEvent(종료 시 정리)
+  users.ts          create, update, setStatus, askStillHere, confirmZone, listByEvent
   chatRequests.ts   create, setStatus, forPanel, forAttendee, activeByEvent
   leaving.ts        scheduleLeaving, warn(10분 전), leave(떠나는 시각)
   seed.ts           ensure(처음 채우기), resetDemo(데모 초기화)
@@ -115,16 +115,18 @@ convex/
 prompts/
   recommend.md      Stage 4 추천 프롬프트 초안 (입력·출력 JSON 형식 포함)
 src/
-  app/              layout, page, ClientApp, globals.css(색 토큰)
+  app/              layout, page, ClientApp, globals.css(색 토큰), icon.svg(핀 파비콘)
   components/
     App.tsx         ConvexProvider, 화면 전환
-    ui.tsx          상태 표시, 구역 배지, 버튼, 탭바, 알림 배너
+    ui.tsx          아이콘, 핀 로고·구역 배지, 혼잡도 배지, 버튼, 탭바, 알림 배너, Still here?
+    FloorPlan.tsx   평면도 위 구역 핀(혼잡도 색), 구역 확대 보기, 범례, 구역 아이콘
     screens/        Welcome, Onboarding, ZonePicker, Discover, Zones, PanelDetail,
                     MyRequests, PanelNow(패널 홈), Me(설정·지표·데모 컨트롤)
   lib/
     store.tsx       모든 상태와 동작. Convex 연결 지점
     types.ts        데이터 타입
-    mockData.ts     구역 목록, 관심사 목록, 예시 사람·요청, makeEvent
+    mockData.ts     구역 목록, 관심사 목록, 예시 사람·요청, makeEvent(종료 시각 고정)
+    floorplan.ts    public/floorplan.png 위 구역 핀 좌표(원본 이미지 픽셀, 구역 코드 기준)
     recommend.ts    규칙 기반 추천 (AI 실패 시 대체용)
     time.ts         시간 표시, 신선도 기준 15분, 떠나기 알림 기준 10분
 ```
@@ -137,7 +139,10 @@ src/
 | `users.create` | mutation | 가입. 인상착의 1~6단어 검사 |
 | `users.update` | mutation | 구역, 인상착의, 공개 여부, 요청 일시정지 |
 | `users.setStatus` | mutation | 대화 가능/대화 중/떠남(`leavingInMin`). 떠남이면 예약 2개 생성 |
+| `users.askStillHere` | mutation | "Still here?" 15분 넘게 업데이트 없는 사람에게 위치 확인 요청 (5분에 한 번) |
+| `users.confirmZone` | mutation | "Yes, I'm still here" 응답. 업데이트 시각 갱신 |
 | `users.listByEvent` | query | 행사 참가자 전체. 숨긴 사람은 구역을 지워서 반환 |
+| `events.zoneActivity` | query | 구역별 혼잡도 등급만 (quiet/some/busy). 숨긴 사람 포함, 3명 미만은 quiet, 6명 이상 busy |
 | `chatRequests.create` | mutation | 요청. 중복·일시정지·떠난 패널 서버에서 차단 |
 | `chatRequests.setStatus` | mutation | 수락/거절/만남/취소/놓침. 누가 무엇을 바꿀 수 있는지 서버에서 검사 |
 | `chatRequests.forPanel` | query | 패널의 대기열 (메모 포함) |
@@ -145,11 +150,15 @@ src/
 | `chatRequests.activeByEvent` | query | 행사 전체의 열린 요청 (누가 했는지·메모 제외). 대기 인원·순서 계산용 |
 | `leaving.warn` / `leaving.leave` | internal | 떠나기 10분 전 표시 / 떠나는 시각에 요청 missed, 패널 숨김 |
 | `events.endEvent` | internal | 종료 시각에 모두의 구역·상태·떠나는 시간 삭제 |
-| `seed.ensure` / `seed.resetDemo` | mutation | 처음 채우기 / 데모 초기화 (실제 가입자는 건드리지 않음) |
+| `seed.ensure` / `seed.resetDemo` | mutation | 처음 채우기(기존 행사는 종료 시각·구역 이름만 맞춤) / 데모 초기화(빠진 예시 사람 추가, 실제 가입자는 건드리지 않음) |
 
 **예약 작업 설계**: 떠나는 시간이나 종료 시각이 바뀌면 새로 예약하고, 예전 예약은 실행될 때 값이 다르면 아무것도 하지 않는다. Convex 대시보드 → Schedules에서 볼 수 있다.
 
 **알림**: 앱 화면 안 배너(Toast)만 쓴다. 폰 푸시 알림 없음.
+
+**디자인 토큰**: 색은 `globals.css`의 변수만 쓴다. 주요 버튼·강조 `primary`(파랑), 보조 `primary-soft`(연한 파랑), 붐비는 구역 `crowd`(주황), 한산 `quiet`(회색), 상태 3색(초록·빨강·노랑)은 그대로. 다크 모드에서는 평면도 이미지를 반전(`.floorplan-img`).
+
+**평면도**: `public/floorplan.png`(1622×1252)를 SVG로 잘라 보여 주고, `src/lib/floorplan.ts`의 좌표에 핀을 그린다. 구역을 바꾸면 `mockData.ts`의 ZONES(코드 유지)와 `floorplan.ts`의 좌표를 같이 고친다. 앱을 열면 `seed.ensure`가 코드 기준으로 DB의 구역 이름을 맞춘다.
 
 **활동 기록**: `activity` 표는 만들어져 있지만 아직 브라우저 안에서만 센다 (Stage 5에서 Convex로).
 
@@ -165,7 +174,8 @@ src/
 - [x] 긴급: 행사 종료 시각을 일 10/25 16:00 PT로 고정 (8-1) — 배포 후 데모 주소를 한 번 열면 Production도 고쳐짐
 - [ ] Stage 4: AI 추천 (8-2) — Claude API 키 필요
 - [ ] Stage 5: 지표 기록 (8-3)
-- [ ] 실제 구역 이름으로 바꾸기 (8-4) — H@B 앱 행사장 지도 참고
+- [x] 실제 구역 이름으로 바꾸기 (8-4) — Palace of Fine Arts 1층 평면도 기준 7개 구역
+- [x] 디자인 개선: 평면도 위치 선택, 구역 혼잡도, 구역별 사람 카드(좌우 넘김), Still here?, 파란색 테마·둥근 버튼·핀 로고
 - [ ] 폰 홈 화면 앱(PWA) (8-5)
 - [ ] Stage 6-1: 패널 쪽 3줄 브리핑 (8-6)
 - [ ] Stage 6-2: 놓쳤을 때 후속 메시지 (8-6)
@@ -313,6 +323,7 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 ## 9. 주의할 점
 
 - **Production과 Development는 데이터가 따로**다. 데모 주소에서 보이는 사람과 노트북에서 보이는 사람이 다른 게 정상.
+- **새 예시 참석자 6명**(Maya, Omar, Jin, Sara, Leo, Nina)은 기존 DB에는 자동으로 안 들어간다. Production에서 Me → Demo controls → **Reset demo**를 한 번 눌러야 추가되고, Atrium이 주황(Busy)으로 보인다. Jin·Sara·Nina는 위치 숨김 상태라 혼잡도에만 반영된다.
 - **예시 사람은 시간이 지나면 떠난다**: seed 직후 Priya는 8분 뒤, Ahmed는 25분 뒤 떠나도록 예약된다. 데모 전에 Me → Demo controls → **Reset demo**로 초기화.
 - **Vercel 배포가 "Blocked"**로 막히면 (무료 플랜 + Private 저장소 + 다른 사람 커밋) GitHub 저장소를 Public으로 바꾼다. 비밀값은 저장소에 없어서 안전하고, Devpost 제출 때도 공개가 필요하다.
 - **Vercel에서 Convex "Add" 연동은 누르지 않는다.** 새 Convex 프로젝트가 따로 생겨 지금 데이터와 끊긴다. 배포 키 방식을 쓰고 있다.
@@ -352,3 +363,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/23 21:05 Vercel + Convex Production 배포 → https://spot-psi-two.vercel.app
 - 10/23 21:20 HANDOFF.md 작성
 - 10/23 22:15 8-1 행사 종료 시각 일 16:00 PT 고정, 시간 표시를 영어·태평양 시간으로
+- 10/23 22:45 디자인 개선 (평면도·혼잡도·사람 카드·Still here?·파란색 테마·핀 로고), 구역 이름 실제 평면도 기준으로, 예시 참석자 6명 추가

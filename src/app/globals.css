@@ -1,12 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #eef1f5;
+  --bg: #f3f7fd;
   --surface: #ffffff;
-  --surface-2: #f5f7fa;
-  --ink: #14213d;
-  --muted: #5a6478;
-  --line: #d9dfe8;
+  --surface-2: #edf3fc;
+  --ink: #0f1f3d;
+  --muted: #56627a;
+  --line: #d6e1f0;
+  --primary: #1f6feb;
+  --primary-hover: #185bd0;
+  --primary-soft: #e2eeff;
+  --primary-soft-hover: #d0e3ff;
+  --primary-ink: #1554bf;
+  --on-primary: #ffffff;
+  --crowd: #f07a1a;
+  --crowd-soft: #ffecd9;
+  --crowd-ink: #a94c06;
+  --quiet: #a3adbf;
+  --quiet-soft: #eef1f6;
   --go: #0e9f55;
   --go-soft: #dcf4e7;
   --busy: #dc3a41;
@@ -17,20 +28,31 @@
   --go-ink: #087a40;
   --busy-ink: #b3242b;
   --soon-ink: #8a5a00;
-  --board: #14213d;
+  --board: #0f2a5c;
   --board-text: #ffd166;
-  --board-dim: #93a3c4;
-  --focus: #3d7bff;
+  --board-dim: #a3b8de;
+  --focus: #1f6feb;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0d1424;
-    --surface: #162036;
-    --surface-2: #1c2842;
-    --ink: #e8edf7;
-    --muted: #9aa6bf;
-    --line: #2a3754;
+    --bg: #0b1324;
+    --surface: #13203a;
+    --surface-2: #1a2a4a;
+    --ink: #e8eefb;
+    --muted: #9fb0cf;
+    --line: #263a5e;
+    --primary: #5b9bff;
+    --primary-hover: #7aafff;
+    --primary-soft: #17305c;
+    --primary-soft-hover: #1e3c70;
+    --primary-ink: #a8c8ff;
+    --on-primary: #061430;
+    --crowd: #ff9640;
+    --crowd-soft: #3d2410;
+    --crowd-ink: #ffb070;
+    --quiet: #5d6b85;
+    --quiet-soft: #1b2741;
     --go: #2bc473;
     --go-soft: #12301f;
     --busy: #ff646a;
@@ -41,21 +63,32 @@
     --go-ink: #5ddc95;
     --busy-ink: #ff8f94;
     --soon-ink: #ffc24d;
-    --board: #070c17;
+    --board: #07142e;
     --board-text: #ffd166;
-    --board-dim: #7182a6;
-    --focus: #6f9bff;
+    --board-dim: #8aa2cc;
+    --focus: #7aafff;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #0d1424;
-  --surface: #162036;
-  --surface-2: #1c2842;
-  --ink: #e8edf7;
-  --muted: #9aa6bf;
-  --line: #2a3754;
+  --bg: #0b1324;
+  --surface: #13203a;
+  --surface-2: #1a2a4a;
+  --ink: #e8eefb;
+  --muted: #9fb0cf;
+  --line: #263a5e;
+  --primary: #5b9bff;
+  --primary-hover: #7aafff;
+  --primary-soft: #17305c;
+  --primary-soft-hover: #1e3c70;
+  --primary-ink: #a8c8ff;
+  --on-primary: #061430;
+  --crowd: #ff9640;
+  --crowd-soft: #3d2410;
+  --crowd-ink: #ffb070;
+  --quiet: #5d6b85;
+  --quiet-soft: #1b2741;
   --go: #2bc473;
   --go-soft: #12301f;
   --busy: #ff646a;
@@ -66,10 +99,10 @@
   --go-ink: #5ddc95;
   --busy-ink: #ff8f94;
   --soon-ink: #ffc24d;
-  --board: #070c17;
+  --board: #07142e;
   --board-text: #ffd166;
-  --board-dim: #7182a6;
-  --focus: #6f9bff;
+  --board-dim: #8aa2cc;
+  --focus: #7aafff;
   color-scheme: dark;
 }
 
@@ -80,6 +113,17 @@
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-hover: var(--primary-soft-hover);
+  --color-primary-ink: var(--primary-ink);
+  --color-on-primary: var(--on-primary);
+  --color-crowd: var(--crowd);
+  --color-crowd-soft: var(--crowd-soft);
+  --color-crowd-ink: var(--crowd-ink);
+  --color-quiet: var(--quiet);
+  --color-quiet-soft: var(--quiet-soft);
   --color-go: var(--go);
   --color-go-soft: var(--go-soft);
   --color-busy: var(--busy);
@@ -141,4 +185,36 @@ body::before {
 
 .toast-in {
   animation: toast-in 180ms ease-out;
+}
+
+/* The venue floor plan is a white drawing; flip it for dark mode. */
+.floorplan-img {
+  filter: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .floorplan-img {
+    filter: invert(0.88) hue-rotate(180deg) saturate(0.8);
+  }
+}
+
+:root[data-theme="dark"] .floorplan-img {
+  filter: invert(0.88) hue-rotate(180deg) saturate(0.8);
+}
+
+@keyframes crowd-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.crowd-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: crowd-pulse 1.8s ease-out infinite;
 }

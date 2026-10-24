@@ -2,7 +2,7 @@
 
 import { useApp } from "@/lib/store";
 import { dayTime } from "@/lib/time";
-import { Button } from "../ui";
+import { Button, Logo } from "../ui";
 
 export function Welcome() {
   const { state, navigate } = useApp();
@@ -11,10 +11,7 @@ export function Welcome() {
 
   return (
     <main className="flex min-h-dvh flex-col px-6 pb-10 pt-16">
-      <div className="flex items-center gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-lg bg-ink text-2xl font-black text-surface">S</span>
-        <span className="text-2xl font-black tracking-tight">Spot</span>
-      </div>
+      <Logo size="lg" />
 
       <h1 className="mt-14 text-[2.6rem] font-black leading-[1.02] tracking-tight">
         Find the right person before they leave.
@@ -39,13 +36,14 @@ export function Welcome() {
       </div>
 
       <div className="mt-auto pt-10">
-        <Button block onClick={() => navigate({ name: "onboarding" })}>
+        <Button block icon="arrow" onClick={() => navigate({ name: "onboarding" })}>
           Join the event
         </Button>
         <p className="mt-4 text-center text-xs leading-relaxed text-muted">
           Only your zone is shared, never your exact location.
           <br />
-          Zones and statuses are deleted when the event ends, {dayTime(state.event.endsAt)}.
+          Zones and statuses are deleted when the event ends,{" "}
+          <span className="whitespace-nowrap">{dayTime(state.event.endsAt)}</span>.
         </p>
       </div>
     </main>

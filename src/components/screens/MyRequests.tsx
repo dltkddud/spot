@@ -61,7 +61,7 @@ export function MyRequests() {
           <div className="mt-8 rounded-2xl border border-dashed border-line p-6 text-center">
             <p className="font-extrabold">No requests yet</p>
             <p className="mt-1 text-sm text-muted">Open someone from Discover and tap Request to chat.</p>
-            <Button className="mt-4" onClick={() => dispatch({ type: "resetTo", screen: { name: "discover" } })}>
+            <Button className="mt-4" icon="search" onClick={() => dispatch({ type: "resetTo", screen: { name: "discover" } })}>
               Go to Discover
             </Button>
           </div>
@@ -78,6 +78,7 @@ export function MyRequests() {
                   </div>
                   <Button
                     variant="go"
+                    icon="check"
                     block
                     className="mt-3"
                     onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "met" })}

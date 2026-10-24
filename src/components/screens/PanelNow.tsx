@@ -53,7 +53,7 @@ export function PanelNow() {
             <button
               key={m}
               onClick={() => dispatch({ type: "setLeaving", minutes: m })}
-              className="rounded-xl border border-line bg-surface py-3 text-sm font-bold"
+              className="rounded-full border border-line bg-surface py-3 text-sm font-bold transition duration-150 hover:border-primary/50 hover:bg-primary-soft active:scale-[0.96]"
             >
               {m === 60 ? "In 1 hour" : `In ${m} min`}
             </button>
@@ -117,11 +117,12 @@ export function PanelNow() {
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button variant="go" onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "met" })}>
+                <Button variant="go" icon="check" onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "met" })}>
                   We met
                 </Button>
                 <Button
                   variant="secondary"
+                  icon="x"
                   onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "missed" })}
                 >
                   Didn&apos;t show
@@ -138,7 +139,7 @@ export function PanelNow() {
           return (
             <div key={r.id} className="rounded-2xl border border-line bg-surface p-4">
               <div className="flex items-start gap-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-ink text-sm font-black text-surface">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-black text-on-primary">
                   {i + 1}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -156,11 +157,12 @@ export function PanelNow() {
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "accepted" })}>
+                <Button icon="check" onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "accepted" })}>
                   Accept
                 </Button>
                 <Button
                   variant="secondary"
+                  icon="x"
                   onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "declined" })}
                 >
                   Not now

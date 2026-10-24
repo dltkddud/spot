@@ -12,7 +12,7 @@ import { PanelNow } from "./screens/PanelNow";
 import { Welcome } from "./screens/Welcome";
 import { ZonePicker } from "./screens/ZonePicker";
 import { ZoneDetail, Zones } from "./screens/Zones";
-import { TabBar, Toasts } from "./ui";
+import { PinMark, StillHerePrompt, TabBar, Toasts } from "./ui";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -20,7 +20,7 @@ function HomeHeader() {
   const { state, me } = useApp();
   return (
     <header className="sticky top-[env(safe-area-inset-top,0px)] z-20 flex h-14 items-center gap-3 border-b border-line bg-bg/95 px-5 backdrop-blur">
-      <span className="grid h-8 w-8 place-items-center rounded-md bg-ink text-base font-black text-surface">S</span>
+      <PinMark size={30} />
       <span className="flex-1 leading-tight">
         <span className="block text-base font-black">Spot</span>
         <span className="block text-[11px] text-muted">{state.event.name}</span>
@@ -40,6 +40,7 @@ function Router() {
   const withTabs = (node: ReactNode, home = false) => (
     <>
       {home && <HomeHeader />}
+      <StillHerePrompt />
       {node}
       <TabBar />
     </>
