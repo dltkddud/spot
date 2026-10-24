@@ -4,6 +4,7 @@ import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { queueFor, useApp, type Screen } from "@/lib/store";
 import { isStale, minutesAgo, minutesUntil } from "@/lib/time";
 import type { CrowdLevel, Status, User, Zone } from "@/lib/types";
+import { PIN_PATH, ZoneMark } from "./ZoneIcon";
 
 const iconPaths = {
   arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
@@ -73,22 +74,12 @@ export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 }
 
 // The Spot pin: a map pin that connects people and places.
-export function PinMark({ size = 32, children }: { size?: number; children?: ReactNode }) {
+export function PinMark({ size = 32 }: { size?: number }) {
   return (
-    <span className="relative inline-grid shrink-0 place-items-center" style={{ width: size * 0.8, height: size }}>
-      <svg width={size * 0.8} height={size} viewBox="0 0 24 30" aria-hidden className="absolute inset-0">
-        <path d="M12 29s-11-9.4-11-17.2C1 5.6 5.9 1 12 1s11 4.6 11 10.8C23 19.6 12 29 12 29z" fill="var(--primary)" />
-        {!children && <circle cx="12" cy="11.5" r="4.2" fill="var(--on-primary)" />}
-      </svg>
-      {children && (
-        <span
-          className="relative font-black leading-none text-on-primary"
-          style={{ fontSize: size * 0.42, marginTop: -size * 0.16 }}
-        >
-          {children}
-        </span>
-      )}
-    </span>
+    <svg width={size * 0.8} height={size} viewBox="0 0 24 30" aria-hidden className="shrink-0">
+      <path d={PIN_PATH} fill="var(--primary)" />
+      <circle cx="12" cy="11.5" r="4.2" fill="var(--on-primary)" />
+    </svg>
   );
 }
 
@@ -150,8 +141,8 @@ export function StatusPill({ user, now }: { user: User; now: number }) {
 export function ZoneBadge({ zone, size = "sm" }: { zone?: Zone; size?: "sm" | "lg" }) {
   if (!zone) return <span className="text-sm text-muted">No zone set</span>;
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <PinMark size={size === "lg" ? 48 : 24}>{zone.code}</PinMark>
+    <span className="inline-flex items-center gap-2">
+      <ZoneMark code={zone.code} size={size === "lg" ? 48 : 26} />
       <span className={size === "lg" ? "text-lg font-bold" : "text-sm font-semibold"}>{zone.name}</span>
     </span>
   );

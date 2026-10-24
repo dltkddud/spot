@@ -4,9 +4,10 @@ import { sharedInterests } from "@/lib/recommend";
 import { useApp } from "@/lib/store";
 import { isStale, minutesAgo } from "@/lib/time";
 import type { User } from "@/lib/types";
-import { CrowdLegend, FloorPlan, ZoneGlyph } from "../FloorPlan";
+import { CrowdLegend, FloorPlan } from "../FloorPlan";
+import { ZoneMark } from "../ZoneIcon";
 import { useMyPeople } from "../Connections";
-import { Avatar, Button, CrowdBadge, Header, Icon, PinMark, StatusPill, StillHereAsk } from "../ui";
+import { Avatar, Button, CrowdBadge, Header, Icon, StatusPill, StillHereAsk } from "../ui";
 import { ZonePreview } from "./ZonePicker";
 
 export function Zones() {
@@ -42,7 +43,7 @@ export function Zones() {
                   isMine ? "border-primary" : "border-line"
                 }`}
               >
-                <PinMark size={44}>{z.code}</PinMark>
+                <ZoneMark code={z.code} size={48} />
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="font-extrabold">{z.name}</span>
@@ -68,9 +69,6 @@ export function Zones() {
                         `, ${people.length - panels.length} attendee${people.length - panels.length > 1 ? "s" : ""}`}
                     </span>
                   </span>
-                </span>
-                <span className="text-primary-ink">
-                  <ZoneGlyph code={z.code} size={22} />
                 </span>
               </button>
             );

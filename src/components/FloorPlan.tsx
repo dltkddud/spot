@@ -1,10 +1,9 @@
 "use client";
 
-import type { KeyboardEvent, ReactNode } from "react";
-import { FLOORPLAN, ZONE_MAP, type ZoneIcon } from "@/lib/floorplan";
+import type { KeyboardEvent } from "react";
+import { FLOORPLAN, ZONE_MAP } from "@/lib/floorplan";
 import type { CrowdLevel, Zone } from "@/lib/types";
-
-const PIN = "M12 29s-11-9.4-11-17.2C1 5.6 5.9 1 12 1s11 4.6 11 10.8C23 19.6 12 29 12 29z";
+import { ICON_STROKE, iconFor, PIN_PATH } from "./ZoneIcon";
 
 const pinFill: Record<CrowdLevel, string> = {
   busy: "var(--crowd)",
@@ -89,12 +88,23 @@ export function FloorPlan({ zones, activity, selectedId, myZoneId, onSelect, foc
             <ellipse rx={7 * k} ry={2.6 * k} fill={pinFill[level]} opacity={0.35} />
             <g transform={`translate(${-12 * k} ${-29 * k}) scale(${k})`} className="transition-transform">
               <path
-                d={PIN}
+                d={PIN_PATH}
                 fill={pinFill[level]}
                 stroke={selected ? "var(--ink)" : "var(--surface)"}
                 strokeWidth={selected ? 2.4 : 1.6}
               />
-              <text x="12" y="16" textAnchor="middle" fontSize="12" fontWeight="900" fill={pinText[level]}>
+              <g
+                transform="translate(5 4.5) scale(0.5833)"
+                fill="none"
+                stroke={pinText[level]}
+                strokeWidth={ICON_STROKE * 1.2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                {iconFor(z.code)}
+              </g>
+              <circle cx="21" cy="3.5" r="5" fill="var(--ink)" stroke="var(--surface)" strokeWidth="1.2" />
+              <text x="21" y="5.8" textAnchor="middle" fontSize="6.6" fontWeight="900" fill="var(--surface)">
                 {z.code}
               </text>
             </g>
@@ -134,36 +144,5 @@ export function CrowdLegend() {
         </span>
       ))}
     </div>
-  );
-}
-
-const glyphs: Record<ZoneIcon, ReactNode> = {
-  columns: <path d="M4 20h16M5 8h14M6 5h12l1 3H5l1-3zM7 8v12M12 8v12M17 8v12" />,
-  hall: <path d="M3 20h18M5 20V9l7-5 7 5v11M9 20v-6h6v6" />,
-  rooms: <path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />,
-  hallway: <path d="M3 9h18M3 15h18M7 12h2M15 12h2M11 12h2" />,
-  doors: <path d="M4 21V4h7v17M13 21V4h7v17M9 12v1M15 12v1M2 21h20" />,
-  stairs: <path d="M3 20h5v-5h5v-5h5V5h3" />,
-  dome: <path d="M3 18h18M5 18a7 7 0 0 1 14 0M12 11V8M8 13l-1.5-1.5M16 13l1.5-1.5M3 21h18" />,
-};
-
-// A simple drawing that stands for each zone's landmark.
-export function ZoneGlyph({ code, size = 28 }: { code: string; size?: number }) {
-  const icon = ZONE_MAP[code]?.icon;
-  if (!icon) return null;
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      {glyphs[icon]}
-    </svg>
   );
 }

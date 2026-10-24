@@ -3,8 +3,9 @@
 import { useState, type ReactNode } from "react";
 import { homeFor, useApp } from "@/lib/store";
 import type { Zone } from "@/lib/types";
-import { CrowdLegend, FloorPlan, ZoneGlyph } from "../FloorPlan";
-import { Button, CrowdBadge, Header, PinMark, SectionTitle } from "../ui";
+import { CrowdLegend, FloorPlan } from "../FloorPlan";
+import { Button, CrowdBadge, Header, SectionTitle } from "../ui";
+import { ZoneMark } from "../ZoneIcon";
 
 function peopleHere(n: number) {
   return n === 0 ? "No one here yet" : n === 1 ? "1 person here" : `${n} people here`;
@@ -18,14 +19,9 @@ export function ZonePreview({ zone, here, action }: { zone: Zone; here: number; 
       <FloorPlan zones={state.zones} activity={state.zoneActivity} focusId={zone.id} selectedId={zone.id} />
       <div className="p-4">
         <div className="flex items-start gap-3">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary-ink">
-            <ZoneGlyph code={zone.code} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-1.5 text-lg font-extrabold leading-tight">
-              <PinMark size={22}>{zone.code}</PinMark>
-              {zone.name}
-            </p>
+          <ZoneMark code={zone.code} size={52} />
+          <div className="min-w-0 flex-1 pl-1">
+            <p className="text-lg font-extrabold leading-tight">{zone.name}</p>
             <p className="mt-1 text-sm text-muted">{zone.landmark}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <CrowdBadge level={state.zoneActivity[zone.id] ?? "quiet"} />
@@ -98,12 +94,7 @@ export function ZonePicker({ fromOnboarding }: { fromOnboarding?: boolean }) {
                   selected ? "border-primary bg-primary-soft" : "border-line bg-surface"
                 }`}
               >
-                <span className="flex items-start justify-between gap-2">
-                  <PinMark size={40}>{z.code}</PinMark>
-                  <span className="text-primary-ink">
-                    <ZoneGlyph code={z.code} size={24} />
-                  </span>
-                </span>
+                <ZoneMark code={z.code} size={44} />
                 <span className="mt-3 text-base font-extrabold leading-tight">{z.name}</span>
                 <span className="mt-1 text-xs leading-snug text-muted">{z.landmark}</span>
                 <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">

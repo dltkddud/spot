@@ -6,7 +6,8 @@ import { useApp } from "@/lib/store";
 import { YourPeople } from "../Connections";
 import { HuddleCard } from "../Huddle";
 import { minutesUntil } from "@/lib/time";
-import { Avatar, Chip, PanelCard, PillButton, PinMark, SectionTitle, StatusPill, ZoneBadge } from "../ui";
+import { Avatar, Chip, PanelCard, PillButton, SectionTitle, StatusPill, ZoneBadge } from "../ui";
+import { ZoneMark } from "../ZoneIcon";
 
 export function MyBar() {
   const { state, me, navigate } = useApp();
@@ -51,7 +52,7 @@ function LeavingBoard() {
                 onClick={() => navigate({ name: "panelDetail", panelId: p.id })}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
               >
-                <PinMark size={32}>{zone?.code ?? "?"}</PinMark>
+                {zone ? <ZoneMark code={zone.code} size={32} /> : <span className="w-[26px]" />}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-bold">{p.name}</span>
                   <span className="block truncate text-xs text-board-dim">

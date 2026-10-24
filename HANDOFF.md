@@ -4,7 +4,7 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-23 23:54 PT
+마지막 업데이트: 2026-10-23 23:58 PT
 
 ---
 
@@ -126,6 +126,7 @@ src/
     ui.tsx          아이콘, 핀 로고·구역 배지, 혼잡도 배지, 버튼, 탭바, 알림 배너, Still here?
     FloorPlan.tsx   평면도 위 구역 핀(혼잡도 색), 구역 확대 보기, 범례, 구역 아이콘
     Huddle.tsx      참석자용 Huddle 카드(제안·대기·완성·Stay connected), 패널용 묶음 카드
+    ZoneIcon.tsx    구역 아이콘 7개(24 격자, 선 두께 2)와 ZoneMark(핀 안 아이콘 + 코드 배지). 구역이 나오는 모든 곳에서 사용
     Connections.tsx Your people 줄, 위치 공개 범위 선택, Connect with friends(코드·링크 복사·코드 입력·연결 목록)
     screens/        Welcome, Onboarding, ZonePicker, Discover, Zones, PanelDetail,
                     MyRequests, PanelNow(패널 홈), Me(설정·지표·데모 컨트롤)
@@ -133,7 +134,7 @@ src/
     store.tsx       모든 상태와 동작. Convex 연결 지점
     types.ts        데이터 타입
     mockData.ts     구역 목록, 관심사 목록, 예시 사람·요청, makeEvent(종료 시각 고정)
-    floorplan.ts    public/floorplan.png 위 구역 핀 좌표(원본 이미지 픽셀, 구역 코드 기준)
+    floorplan.ts    public/floorplan.png 위 구역 핀 좌표(원본 이미지 픽셀, 구역 코드 기준)와 구역별 아이콘 이름
     recommend.ts    규칙 기반 추천 (AI 실패 시 대체용)
     time.ts         시간 표시, 신선도 기준 15분, 떠나기 알림 기준 10분
 ```
@@ -207,7 +208,7 @@ src/
 - [x] 디자인 개선: 평면도 위치 선택, 구역 혼잡도, 구역별 사람 카드(좌우 넘김), Still here?, 파란색 테마·둥근 버튼·핀 로고
 - [x] Huddle: 같은 줄 관심사 매칭, 함께 수락·만남, Stay connected, Open to huddles, 데모 버튼
 - [x] Connections: 연결 코드·초대 링크, 위치 공개 범위(Everyone / Only my connections / No one), Your people, Zones 표시, 데모 버튼
-- [ ] 구역 아이콘 통일
+- [x] 구역 아이콘 통일: Pavilion 텐트, Atrium 기둥 홀, Breakouts 1–4 문 2개, Broadway 복도·화살표, Broadway 3 출입문, Breakouts 5–7 문 3개, Theater 무대·커튼
 - [ ] 노트북용 휴대폰 화면 프레임
 - [ ] 폰 홈 화면 앱(PWA) (8-5)
 - [ ] Stage 6-1: 패널 쪽 3줄 브리핑 (8-6)
@@ -401,3 +402,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/23 22:45 디자인 개선 (평면도·혼잡도·사람 카드·Still here?·파란색 테마·핀 로고), 구역 이름 실제 평면도 기준으로, 예시 참석자 6명 추가
 - 10/23 23:50 Huddle (관심사 겹치는 대기자끼리 함께 만나기, 묶음 수락, Stay connected, 활동 숫자)
 - 10/23 23:54 Connections (연결 코드·초대 링크, 위치 공개 범위, Your people)
+- 10/23 23:58 구역 아이콘 통일 (평면도 핀·구역 배지·카드에 같은 아이콘 + 코드 배지)
