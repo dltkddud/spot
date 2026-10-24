@@ -55,7 +55,13 @@ export const leave = internalMutation({
     for (const r of await activeRequests(ctx, userId)) {
       await ctx.db.patch("chatRequests", r._id, { status: "missed" });
     }
-    await ctx.db.patch("users", userId, { visible: false, zoneId: undefined, locationCheckAt: undefined, updatedAt: Date.now() });
+    await ctx.db.patch("users", userId, {
+      visible: false,
+      shareWith: "nobody",
+      zoneId: undefined,
+      locationCheckAt: undefined,
+      updatedAt: Date.now(),
+    });
     return null;
   },
 });

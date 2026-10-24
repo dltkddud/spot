@@ -5,11 +5,13 @@ import { useApp } from "@/lib/store";
 import { isStale, minutesAgo } from "@/lib/time";
 import type { User } from "@/lib/types";
 import { CrowdLegend, FloorPlan, ZoneGlyph } from "../FloorPlan";
-import { Avatar, Button, CrowdBadge, Header, PinMark, StatusPill, StillHereAsk } from "../ui";
+import { useMyPeople } from "../Connections";
+import { Avatar, Button, CrowdBadge, Header, Icon, PinMark, StatusPill, StillHereAsk } from "../ui";
 import { ZonePreview } from "./ZonePicker";
 
 export function Zones() {
   const { state, me, navigate } = useApp();
+  const myPeople = useMyPeople();
   if (!me) return null;
   const open = (zoneId: string) => navigate({ name: "zoneDetail", zoneId });
 
@@ -31,6 +33,7 @@ export function Zones() {
             const panels = people.filter((u) => u.role === "panel");
             const free = panels.filter((p) => p.status === "available").length;
             const isMine = me.zoneId === z.id;
+            const friends = myPeople.filter((p) => p.visible && p.zoneId === z.id);
             return (
               <button
                 key={z.id}
@@ -44,6 +47,12 @@ export function Zones() {
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="font-extrabold">{z.name}</span>
                     {isMine && <span className="text-xs font-bold text-primary-ink">You&apos;re here</span>}
+                    {friends.length > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-xs font-bold text-primary-ink">
+                        <Icon name="link" size={12} />
+                        {friends.length === 1 ? friends[0].name.split(" ")[0] : `${friends.length} of your people`}
+                      </span>
+                    )}
                   </span>
                   <span className="block truncate text-xs text-muted">{z.landmark}</span>
                   <span className="mt-2 flex flex-wrap items-center gap-1.5">

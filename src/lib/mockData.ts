@@ -232,7 +232,9 @@ export function makeUsers(now: number): User[] {
       outfit: "black turtleneck, canvas tote",
       zoneId: "z-theater",
       status: "available",
-      visible: true,
+      // Shares their zone only with connections; "Connect me with demo friends" reveals it.
+      visible: false,
+      shareWith: "connections",
       requestsPaused: false,
       updatedAt: now - 2 * MIN,
     },

@@ -36,6 +36,18 @@ export type User = {
   seedKey?: string;
   locationCheckAt?: number;
   openToHuddles?: boolean;
+  // Who sees my zone. Others' visible is already worked out for me by the server.
+  shareWith?: ShareWith;
+  // Only present on my own profile.
+  connectCode?: string;
+};
+
+export type ShareWith = "everyone" | "connections" | "nobody";
+
+export type Connection = {
+  userId: string;
+  source: "huddle" | "code" | "demo";
+  createdAt: number;
 };
 
 // How busy a zone is. Counts hidden people too, so only a level is shared.

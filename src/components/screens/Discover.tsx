@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { localRecommendations } from "@/lib/recommend";
 import { useApp } from "@/lib/store";
+import { YourPeople } from "../Connections";
 import { HuddleCard } from "../Huddle";
 import { minutesUntil } from "@/lib/time";
 import { Avatar, Chip, PanelCard, PillButton, PinMark, SectionTitle, StatusPill, ZoneBadge } from "../ui";
@@ -101,6 +102,7 @@ export function Discover() {
 
   return (
     <main className="px-5 pb-28 pt-5">
+      <YourPeople />
       {myHuddles.length > 0 && (
         <div className="mb-4 space-y-3">
           {myHuddles.map((h) => (

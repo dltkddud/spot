@@ -21,6 +21,7 @@ import type {
   Activity,
   ActivityType,
   ChatRequest,
+  Connection,
   CrowdLevel,
   Huddle,
   RequestStatus,
@@ -33,6 +34,7 @@ import type {
 } from "./types";
 
 const MY_ID_KEY = "spot.myUserId";
+const PENDING_CONNECT_KEY = "spot.pendingConnect";
 
 export type Screen =
   | { name: "welcome" }
@@ -78,6 +80,8 @@ type State = LocalState & {
   huddles: Huddle[];
   // Event-wide counts kept on the server (huddles formed, connections made).
   stats: Record<string, number>;
+  // People I'm connected with (they see my zone when I share with connections).
+  connections: Connection[];
 };
 
 type Action =
@@ -94,6 +98,9 @@ type Action =
   | { type: "setHuddleStatus"; huddleId: string; status: "accepted" | "declined" | "met" | "missed" }
   | { type: "stayConnected"; huddleId: string; otherId: string; yes: boolean }
   | { type: "simulateHuddle" }
+  | { type: "connectCode"; code: string }
+  | { type: "removeConnection"; userId: string }
+  | { type: "simulateFriends" }
   | { type: "requestChat"; panelId: string; note: string }
   | { type: "setRequestStatus"; requestId: string; status: ChatRequest["status"] }
   | { type: "log"; activityType: ActivityType; targetId?: string }
@@ -132,6 +139,30 @@ function saveMyId(id: string | null) {
     else localStorage.removeItem(MY_ID_KEY);
   } catch {
     // Storage blocked (private mode etc.). The account just won't survive a reload.
+  }
+}
+
+// An invite link (?connect=CODE) is remembered until there's an account to connect.
+function takeInviteFromUrl() {
+  try {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("connect");
+    if (!code) return;
+    localStorage.setItem(PENDING_CONNECT_KEY, code);
+    url.searchParams.delete("connect");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  } catch {
+    // Storage blocked: the code can still be typed in Me.
+  }
+}
+
+function takePendingInvite(): string | null {
+  try {
+    const code = localStorage.getItem(PENDING_CONNECT_KEY);
+    localStorage.removeItem(PENDING_CONNECT_KEY);
+    return code;
+  } catch {
+    return null;
   }
 }
 
@@ -256,17 +287,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setHuddleStatus = useMutation(api.huddles.setGroupStatus);
   const stayConnected = useMutation(api.huddles.stayConnected);
   const demoHuddle = useMutation(api.huddles.demoPropose);
+  const ensureCode = useMutation(api.connections.ensureCode);
+  const connectByCode = useMutation(api.connections.connectByCode);
+  const removeConnection = useMutation(api.connections.remove);
+  const demoFriends = useMutation(api.connections.demoFriends);
   const createRequest = useMutation(api.chatRequests.create);
   const setRequestStatus = useMutation(api.chatRequests.setStatus);
 
   useEffect(() => {
     ensureSeed().catch((e) => console.error("Seeding failed", e));
+    takeInviteFromUrl();
   }, [ensureSeed]);
 
   const current = useLatest(useQuery(api.events.current));
   const eventId = current?.event._id;
   const rawUsers = useLatest(
-    useQuery(api.users.listByEvent, eventId ? { eventId, viewerId: local.myUserId ?? undefined } : "skip"),
+    useQuery(
+      api.users.listByEvent,
+      eventId ? { eventId, viewerId: (local.booted ? local.currentUserId : local.myUserId) ?? undefined } : "skip",
+    ),
   );
 
   const viewerId = local.booted ? (local.currentUserId as Id<"users"> | null) : null;
@@ -281,6 +320,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const myHuddles = useLatest(useQuery(api.huddles.forAttendee, viewerId ? { attendeeId: viewerId } : "skip"));
   const lineHuddles = useLatest(useQuery(api.huddles.forPanel, viewerId ? { panelId: viewerId } : "skip"));
   const summary = useLatest(useQuery(api.activity.summary, eventId ? { eventId } : "skip"));
+  const myLinks = useLatest(useQuery(api.connections.mine, viewerId ? { userId: viewerId } : "skip"));
+  const connections = useMemo<Connection[]>(
+    () => (myLinks ?? []).map(({ otherId, source, createdAt }) => ({ userId: otherId, source, createdAt })),
+    [myLinks],
+  );
   const stats = useMemo(() => summary ?? {}, [summary]);
 
   const event = useMemo<EventInfo | undefined>(
@@ -434,6 +478,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     seen.loaded = true;
   }, [viewerId, users, myHuddles]);
 
+  // Banner when someone connects with me. Connections I made get their banner from the action.
+  const seenLinks = useRef<{ viewerId: string; ids: Set<string>; loaded: boolean } | null>(null);
+  useEffect(() => {
+    if (!viewerId || !users || !myLinks) return;
+    if (seenLinks.current?.viewerId !== viewerId) seenLinks.current = { viewerId, ids: new Set(), loaded: false };
+    const seen = seenLinks.current;
+    for (const link of myLinks) {
+      if (seen.ids.has(link.otherId)) continue;
+      seen.ids.add(link.otherId);
+      if (!seen.loaded || (link.source !== "huddle" && link.by === viewerId)) continue;
+      const name = users.find((u) => u.id === link.otherId)?.name.split(" ")[0] ?? "Someone";
+      localDispatch({
+        type: "toast",
+        message: link.source === "huddle" ? `You and ${name} are now connected.` : `${name} connected with you.`,
+      });
+    }
+    seen.loaded = true;
+  }, [viewerId, users, myLinks]);
+
+  // Accounts made before connect codes existed get one when they open the app.
+  const me = users?.find((u) => u.id === local.currentUserId);
+  const needsCode = !!me && !me.connectCode;
+  useEffect(() => {
+    if (needsCode && viewerId) ensureCode({ userId: viewerId }).catch(() => {});
+  }, [needsCode, viewerId, ensureCode]);
+
   const creating = useRef(false);
 
   const dispatch = useCallback<Dispatch<Action>>(
@@ -460,13 +530,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         case "updateMe": {
           if (!meId) return;
-          const { zoneId, outfit, visible, requestsPaused, openToHuddles } = action.patch;
+          const { zoneId, outfit, visible, shareWith, requestsPaused, openToHuddles } = action.patch;
           run(
             updateUser({
               id: meId,
               zoneId: zoneId as Id<"zones"> | undefined,
               outfit,
               visible,
+              shareWith,
               requestsPaused,
               openToHuddles,
             }),
@@ -529,6 +600,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         case "simulateHuddle":
           if (meId) run(demoHuddle({ attendeeId: meId }));
+          return;
+
+        case "connectCode":
+          if (!meId) return;
+          run(
+            connectByCode({ userId: meId, code: action.code }).then(({ name, isNew }) => {
+              localDispatch({
+                type: "toast",
+                message: isNew ? `You're connected with ${name}.` : `You're already connected with ${name}.`,
+              });
+            }),
+          );
+          return;
+
+        case "removeConnection":
+          if (meId) run(removeConnection({ userId: meId, otherId: action.userId as Id<"users"> }));
+          return;
+
+        case "simulateFriends":
+          if (meId) {
+            run(
+              demoFriends({ userId: meId }).then(() =>
+                localDispatch({ type: "toast", message: "You're connected with Maya and Leo. See them under Your people." }),
+              ),
+            );
+          }
           return;
 
         case "requestChat":
@@ -620,15 +717,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setHuddleStatus,
       stayConnected,
       demoHuddle,
+      connectByCode,
+      removeConnection,
+      demoFriends,
       createRequest,
       setRequestStatus,
       resetDemo,
     ],
   );
 
+  // Opened an invite link: connect as soon as there's an account (right after
+  // sign-up if needed). The code's owner gave it out, which is their consent.
+  useEffect(() => {
+    if (!local.booted || !local.myUserId) return;
+    const code = takePendingInvite();
+    if (code) dispatch({ type: "connectCode", code });
+  }, [local.booted, local.myUserId, dispatch]);
+
   const value = useMemo<AppContextValue | null>(() => {
     if (!event || !users) return null;
-    const state: State = { ...local, event, zones, users, requests, zoneActivity, huddles, stats };
+    const state: State = { ...local, event, zones, users, requests, zoneActivity, huddles, stats, connections };
     const me = users.find((u) => u.id === local.currentUserId);
     return {
       state,
@@ -638,7 +746,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       navigate: (screen, replace) => dispatch({ type: "navigate", screen, replace }),
       back: () => dispatch({ type: "back" }),
     };
-  }, [local, event, zones, users, requests, zoneActivity, huddles, stats, dispatch]);
+  }, [local, event, zones, users, requests, zoneActivity, huddles, stats, connections, dispatch]);
 
   if (!event || !users || !local.booted) return <div className="min-h-dvh bg-bg" />;
 

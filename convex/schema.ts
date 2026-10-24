@@ -43,9 +43,15 @@ export default defineSchema({
     locationCheckAt: v.optional(v.number()),
     // false = never suggest huddles to me. Missing means yes.
     openToHuddles: v.optional(v.boolean()),
+    // Who sees my zone. visible stays true only for "everyone"; missing means
+    // "everyone" if visible, otherwise "nobody".
+    shareWith: v.optional(v.union(v.literal("everyone"), v.literal("connections"), v.literal("nobody"))),
+    // 6-character code friends type (or open as a link) to connect with me.
+    connectCode: v.optional(v.string()),
   })
     .index("by_event", ["eventId"])
-    .index("by_event_role", ["eventId", "role"]),
+    .index("by_event_role", ["eventId", "role"])
+    .index("by_connect_code", ["connectCode"]),
 
   chatRequests: defineTable({
     eventId: v.id("events"),
@@ -108,6 +114,8 @@ export default defineSchema({
     userId: v.id("users"),
     otherId: v.id("users"),
     source: v.union(v.literal("huddle"), v.literal("code"), v.literal("demo")),
+    // Who made the connection, so only the other person gets a "connected with you" banner.
+    by: v.optional(v.id("users")),
     createdAt: v.number(),
   }).index("by_user_and_other", ["userId", "otherId"]),
 

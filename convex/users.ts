@@ -4,9 +4,17 @@ import { OUTFIT_WORD_LIMIT } from "../src/lib/mockData";
 import { STALE_AFTER_MIN } from "../src/lib/time";
 import { scheduleLeaving } from "./leaving";
 import { proposeFor } from "./huddles";
+import { newConnectCode } from "./connections";
+import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const MIN = 60_000;
+
+const shareWithValidator = v.union(v.literal("everyone"), v.literal("connections"), v.literal("nobody"));
+
+export function shareWithOf(u: Doc<"users">) {
+  return u.shareWith ?? (u.visible ? "everyone" : "nobody");
+}
 
 function cleanOutfit(outfit: string) {
   const trimmed = outfit.trim();
@@ -42,6 +50,8 @@ export const create = mutation({
       outfit: cleanOutfit(args.outfit),
       status: "available",
       requestsPaused: false,
+      shareWith: args.visible ? "everyone" : "nobody",
+      connectCode: await newConnectCode(ctx),
       updatedAt: Date.now(),
     });
   },
@@ -54,11 +64,12 @@ export const update = mutation({
     zoneId: v.optional(v.id("zones")),
     outfit: v.optional(v.string()),
     visible: v.optional(v.boolean()),
+    shareWith: v.optional(shareWithValidator),
     requestsPaused: v.optional(v.boolean()),
     openToHuddles: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, { id, zoneId, outfit, visible, requestsPaused, openToHuddles }) => {
+  handler: async (ctx, { id, zoneId, outfit, visible, shareWith, requestsPaused, openToHuddles }) => {
     const user = await ctx.db.get("users", id);
     if (!user) throw new ConvexError("User not found.");
     if (zoneId) {
@@ -68,7 +79,9 @@ export const update = mutation({
     await ctx.db.patch("users", id, {
       ...(zoneId !== undefined && { zoneId, locationCheckAt: undefined }),
       ...(outfit !== undefined && { outfit: cleanOutfit(outfit) }),
-      ...(visible !== undefined && { visible }),
+      // visible and shareWith always move together.
+      ...(shareWith !== undefined && { shareWith, visible: shareWith === "everyone" }),
+      ...(shareWith === undefined && visible !== undefined && { visible, shareWith: visible ? "everyone" : "nobody" }),
       ...(requestsPaused !== undefined && { requestsPaused }),
       ...(openToHuddles !== undefined && { openToHuddles }),
       updatedAt: Date.now(),
@@ -143,17 +156,32 @@ export const confirmZone = mutation({
   },
 });
 
-// Everyone at the event. Hidden people keep their profile but not their zone,
-// except for the viewer themself.
+// Everyone at the event, as the viewer is allowed to see them. visible is
+// worked out per viewer: true if they share with everyone, or with their
+// connections and the viewer is one. Anyone not visible keeps their profile
+// but not their zone. Only the viewer gets their own connect code.
 export const listByEvent = query({
   args: { eventId: v.id("events"), viewerId: v.optional(v.string()) },
   returns: v.array(schema.doc("users")),
   handler: async (ctx, { eventId, viewerId }) => {
     const viewer = viewerId ? ctx.db.normalizeId("users", viewerId) : null;
+    const connected = new Set<Id<"users">>();
+    if (viewer) {
+      const links = await ctx.db
+        .query("connections")
+        .withIndex("by_user_and_other", (q) => q.eq("userId", viewer))
+        .take(500);
+      links.forEach((l) => connected.add(l.otherId));
+    }
     const users = await ctx.db
       .query("users")
       .withIndex("by_event", (q) => q.eq("eventId", eventId))
       .take(1000);
-    return users.map((u) => (u.visible || u._id === viewer ? u : { ...u, zoneId: undefined }));
+    return users.map(({ connectCode, ...u }) => {
+      if (u._id === viewer) return { ...u, connectCode };
+      const share = shareWithOf({ ...u, connectCode });
+      const seen = share === "everyone" || (share === "connections" && connected.has(u._id));
+      return seen ? { ...u, visible: true } : { ...u, visible: false, zoneId: undefined };
+    });
   },
 });

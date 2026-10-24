@@ -4,6 +4,7 @@ import { useState } from "react";
 import { OUTFIT_WORD_LIMIT } from "@/lib/mockData";
 import { useApp } from "@/lib/store";
 import { dayTime } from "@/lib/time";
+import { ConnectWithFriends, ShareWithPicker } from "../Connections";
 import { Avatar, Button, Header, inputClass, PillButton, SectionTitle, StatusPill, ZoneBadge } from "../ui";
 
 function wordCount(s: string) {
@@ -87,24 +88,10 @@ export function Me() {
           </Button>
         </div>
 
+        <ConnectWithFriends />
+
         <SectionTitle>Privacy</SectionTitle>
-        <label className="flex items-start gap-3 rounded-2xl border border-line bg-surface p-4">
-          <input
-            type="checkbox"
-            role="switch"
-            checked={me.visible}
-            onChange={() => dispatch({ type: "updateMe", patch: { visible: !me.visible } })}
-            className="mt-1 h-5 w-5 accent-[var(--ink)]"
-          />
-          <span>
-            <span className="block font-bold">Show me on the event map</span>
-            <span className="mt-0.5 block text-sm text-muted">
-              {me.visible
-                ? "Others can see your zone, status, and outfit."
-                : "You're hidden. No one can see your zone or send you requests."}
-            </span>
-          </span>
-        </label>
+        <ShareWithPicker />
         {me.role === "attendee" && (
           <label className="mt-3 flex items-start gap-3 rounded-2xl border border-line bg-surface p-4">
             <input
@@ -158,6 +145,9 @@ export function Me() {
               ))}
             </div>
           </div>
+          <Button variant="secondary" icon="link" block onClick={() => dispatch({ type: "simulateFriends" })}>
+            Connect me with demo friends
+          </Button>
           {me.role === "attendee" && (
             <div className="grid gap-2">
               <Button variant="secondary" onClick={() => dispatch({ type: "simulateAccept" })}>
