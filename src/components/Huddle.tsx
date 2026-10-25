@@ -2,7 +2,7 @@
 
 import { positionInQueue, useApp } from "@/lib/store";
 import type { ChatRequest, Huddle, User } from "@/lib/types";
-import { Avatar, Button, Icon } from "./ui";
+import { AiTag, Avatar, Button, Icon } from "./ui";
 
 const first = (u?: User) => u?.name.split(" ")[0] ?? "Someone";
 
@@ -12,6 +12,7 @@ export function joinNames(names: string[]) {
 }
 
 function InterestChips({ interests }: { interests: string[] }) {
+  if (interests.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-1.5">
       {interests.map((i) => (
@@ -19,6 +20,26 @@ function InterestChips({ interests }: { interests: string[] }) {
           {i}
         </span>
       ))}
+    </div>
+  );
+}
+
+// Why we're grouped: Claude's reason and why it's worth it for me, or the
+// interests we share when Claude wasn't available.
+function WhyTogether({ huddle, whyYou }: { huddle: Huddle; whyYou?: string }) {
+  if (huddle.source === "claude" && huddle.reason) {
+    return (
+      <div className="mt-2 space-y-1.5">
+        <p className="text-sm font-semibold leading-snug">{huddle.reason}</p>
+        {whyYou && <p className="text-sm text-muted">{whyYou}</p>}
+        <AiTag claude />
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <InterestChips interests={huddle.sharedInterests} />
+      <AiTag claude={false} />
     </div>
   );
 }
@@ -69,9 +90,7 @@ export function HuddleCard({ huddle, compact }: { huddle: Huddle; compact?: bool
             ? `${first(panel)} is ready for your huddle.`
             : `Huddle ready. You're #${myRequest ? positionInQueue(state.requests, myRequest) : 1} together.`}
         </p>
-        <div className="mt-2">
-          <InterestChips interests={huddle.sharedInterests} />
-        </div>
+        {!compact && <WhyTogether huddle={huddle} whyYou={mine.whyYou} />}
         {!compact && (
           <div className="mt-3 space-y-3 rounded-xl bg-surface p-3">
             {others.map((o) => (
@@ -92,11 +111,11 @@ export function HuddleCard({ huddle, compact }: { huddle: Huddle; compact?: bool
         Huddle idea
       </p>
       <p className="mt-1 text-lg font-extrabold leading-snug">
-        {names} {others.length > 1 ? "are" : "is"} into {topic} too. Meet {first(panel)} together?
+        {huddle.source === "claude" || !topic
+          ? `Meet ${first(panel)} together with ${names}?`
+          : `${names} ${others.length > 1 ? "are" : "is"} into ${topic} too. Meet ${first(panel)} together?`}
       </p>
-      <div className="mt-2">
-        <InterestChips interests={huddle.sharedInterests} />
-      </div>
+      <WhyTogether huddle={huddle} whyYou={mine.whyYou} />
       {!compact && (
         <div className="mt-3 space-y-3 rounded-xl bg-surface p-3">
           {others.map((o) => (
@@ -168,10 +187,28 @@ export function PanelHuddleCard({
           {accepted && <p className="text-xs font-bold text-go-ink">Coming to you now</p>}
           <p className="flex items-center gap-1.5 font-extrabold">
             <Icon name="users" size={18} />
-            <span>{`Huddle · ${people.length} people · All into ${joinNames(huddle.sharedInterests.slice(0, 2))}`}</span>
+            <span>
+              {huddle.sharedQuestion || huddle.sharedInterests.length === 0
+                ? `Huddle · ${people.length} people`
+                : `Huddle · ${people.length} people · All into ${joinNames(huddle.sharedInterests.slice(0, 2))}`}
+            </span>
           </p>
         </div>
       </div>
+      {huddle.sharedQuestion && (
+        <div className="mt-3 rounded-xl bg-primary-soft p-3">
+          <p className="text-xs font-bold text-primary-ink">They all want to know:</p>
+          <p className="mt-0.5 font-bold leading-snug">{huddle.sharedQuestion}</p>
+          <div className="mt-2">
+            <AiTag claude={huddle.source === "claude"} />
+          </div>
+        </div>
+      )}
+      {!huddle.sharedQuestion && (
+        <div className="mt-2">
+          <AiTag claude={false} />
+        </div>
+      )}
       <ul className="mt-3 space-y-3">
         {people.map(({ r, user }) => (
           <li key={r.id} className="flex items-start gap-3">

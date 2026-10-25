@@ -660,7 +660,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!before && h.status === "proposed" && mine?.response === "pending") {
         localDispatch({
           type: "toast",
-          message: `${others.join(" and ")} ${others.length > 1 ? "are" : "is"} into ${h.sharedInterests[0]} too. Meet ${panel} together?`,
+          message: h.reason
+            ? `Huddle idea: meet ${panel} with ${others.join(" and ")}? ${h.reason}`
+            : `${others.join(" and ")} ${others.length > 1 ? "are" : "is"} into ${h.sharedInterests[0] ?? "the same things"} too. Meet ${panel} together?`,
         });
       } else if (before === "proposed" && h.status === "formed") {
         localDispatch({ type: "toast", message: `Huddle ready. You'll meet ${panel} together.` });

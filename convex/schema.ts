@@ -167,15 +167,30 @@ export default defineSchema({
       v.literal("dissolved"), // a member left the line or the speaker left
     ),
     sharedInterests: v.array(v.string()),
+    // Who grouped them: Claude (with a reason for the group and a question for
+    // the speaker) or the shared-interest fallback. Missing means interests.
+    source: v.optional(v.union(v.literal("claude"), v.literal("interests"))),
+    reason: v.optional(v.string()),
+    sharedQuestion: v.optional(v.string()),
     createdAt: v.number(),
     formedAt: v.optional(v.number()),
   }).index("by_panel_and_status", ["panelId", "status"]),
+
+  // The last line composition Claude was asked to group for a speaker, so the
+  // same line isn't sent twice.
+  huddleChecks: defineTable({
+    panelId: v.id("users"),
+    key: v.string(),
+    createdAt: v.number(),
+  }).index("by_panel", ["panelId"]),
 
   huddleMembers: defineTable({
     huddleId: v.id("huddles"),
     userId: v.id("users"),
     requestId: v.id("chatRequests"),
     response: v.union(v.literal("pending"), v.literal("yes"), v.literal("no")),
+    // From Claude: why this person is in the group, shown to them.
+    whyYou: v.optional(v.string()),
     // Removed feature ("Stay connected?" after a huddle). Cleared by the
     // remove-still-here-and-stay migration in seed.ts; delete once both deployments have run it.
     stayAnswered: v.optional(v.array(v.id("users"))),

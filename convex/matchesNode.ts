@@ -137,7 +137,8 @@ export const suggest = action({
   args: { userId: v.id("users"), refresh: v.boolean() },
   returns: v.null(),
   handler: async (ctx, { userId, refresh }) => {
-    const input = await ctx.runQuery(internal.matches.inputs, { userId });
+    const input: { eventId: Id<"events">; me: MatchPerson; candidates: MatchPerson[]; savedKey?: string } | null =
+      await ctx.runQuery(internal.matches.inputs, { userId });
     if (!input) return null;
     const key = hashKey(
       JSON.stringify([

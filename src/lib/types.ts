@@ -145,14 +145,21 @@ export type HuddleMember = {
   userId: string;
   requestId: string;
   response: "pending" | "yes" | "no";
+  // From Claude, only on my own row: why I'm in this group.
+  whyYou?: string;
 };
 
-// Attendees in the same speaker's line who share interests and meet them together.
+// People in the same speaker's line who meet them together. Claude groups
+// them (reason for everyone, sharedQuestion for the speaker only), or shared
+// interests do when Claude isn't available.
 export type Huddle = {
   id: string;
   panelId: string;
   status: "proposed" | "formed";
   sharedInterests: string[];
+  source: "claude" | "interests";
+  reason?: string;
+  sharedQuestion?: string;
   members: HuddleMember[];
 };
 

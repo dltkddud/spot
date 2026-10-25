@@ -19,6 +19,7 @@ import type * as events from "../events.js";
 import type * as followUps from "../followUps.js";
 import type * as followUpsNode from "../followUpsNode.js";
 import type * as huddles from "../huddles.js";
+import type * as huddlesNode from "../huddlesNode.js";
 import type * as leaving from "../leaving.js";
 import type * as matches from "../matches.js";
 import type * as matchesNode from "../matchesNode.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   followUps: typeof followUps;
   followUpsNode: typeof followUpsNode;
   huddles: typeof huddles;
+  huddlesNode: typeof huddlesNode;
   leaving: typeof leaving;
   matches: typeof matches;
   matchesNode: typeof matchesNode;
