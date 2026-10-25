@@ -16,7 +16,7 @@ import {
 } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { LEAVE_WARNING_MIN, minutesUntil } from "./time";
+import { minutesUntil } from "./time";
 import type {
   Activity,
   ActivityType,
@@ -44,6 +44,7 @@ const PENDING_CONNECT_KEY = "spot.pendingConnect";
 export type Screen =
   | { name: "welcome" }
   | { name: "profileSetup" }
+  | { name: "logIn" }
   | { name: "events" }
   | { name: "joinEvent"; eventId: string }
   | { name: "zonePicker"; fromOnboarding?: boolean }
@@ -62,7 +63,7 @@ export type ProfileInput = {
   name: string;
   headline: string;
   interests: string[];
-  linkedinUrl?: string;
+  linkedinUrl: string;
   contactUrl?: string;
 };
 
@@ -82,16 +83,13 @@ type LocalState = {
   profileId: string | null;
   // The event I'm looking at.
   eventId: string | null;
-  // Demo: looking at the app as someone else at this event.
-  viewAsId: string | null;
   stack: Screen[];
   booted: boolean;
 };
 
 type State = LocalState & {
-  // My participation at this event, and whoever I'm viewing as (usually the same).
+  // My participation at this event.
   myUserId: string | null;
-  currentUserId: string | null;
   profile: Profile | null;
   events: EventInfo[];
   participations: Participation[];
@@ -112,30 +110,25 @@ type Action =
   | { type: "back" }
   | { type: "resetTo"; screen: Screen }
   | { type: "createProfile"; profile: ProfileInput }
+  | { type: "logIn"; linkedinUrl: string }
+  | { type: "logOut" }
   | { type: "enterEvent"; eventId: string }
   | { type: "joinEvent"; eventId: string; join: JoinInput }
   | { type: "saveProfile"; profile: ProfileInput; here: { role: Role; talkTitle?: string; outfit: string } }
   | { type: "updateMe"; patch: { zoneId?: string; outfit?: string; shareWith?: ShareWith; requestsPaused?: boolean; openToHuddles?: boolean } }
   | { type: "setStatus"; status: Exclude<Status, "leaving"> }
-  | { type: "setLeaving"; minutes: number }
+  | { type: "setLeaving"; leavingAt: number }
   | { type: "askStillHere"; userId: string }
   | { type: "confirmStillHere" }
   | { type: "huddleRespond"; huddleId: string; accept: boolean }
   | { type: "setHuddleStatus"; huddleId: string; status: "accepted" | "declined" | "met" | "missed" }
-  | { type: "simulateHuddle" }
   | { type: "connectCode"; code: string }
   | { type: "removeConnection"; profileId: string }
-  | { type: "simulateFriends" }
   | { type: "requestChat"; panelId: string; note: string }
   | { type: "setRequestStatus"; requestId: string; status: ChatRequest["status"] }
   | { type: "log"; activityType: ActivityType; targetId?: string }
   | { type: "toast"; message: string }
-  | { type: "dismissToast"; id: string }
-  | { type: "viewAs"; userId: string }
-  | { type: "simulateAccept" }
-  | { type: "simulateLeaving" }
-  | { type: "simulateLeaveNow" }
-  | { type: "reset"; now: number };
+  | { type: "dismissToast"; id: string };
 
 type LocalAction =
   | Extract<Action, { type: "navigate" | "back" | "resetTo" | "toast" | "dismissToast" }>
@@ -144,8 +137,7 @@ type LocalAction =
   | { type: "boot"; profileId: string | null; eventId: string; stack: Screen[] }
   | { type: "setProfile"; profileId: string }
   | { type: "setEvent"; eventId: string; stack: Screen[] }
-  | { type: "viewAs"; userId: string | null; role: Role }
-  | { type: "reset"; now: number; stack: Screen[] };
+  | { type: "logOut" };
 
 let idCounter = 0;
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(idCounter++).toString(36)}`;
@@ -198,7 +190,6 @@ function initialState(now: number): LocalState {
     toasts: [],
     profileId: load(PROFILE_KEY),
     eventId: load(EVENT_KEY),
-    viewAsId: null,
     stack: [{ name: "welcome" }],
     booted: false,
   };
@@ -235,7 +226,7 @@ function reducer(state: LocalState, action: LocalAction): LocalState {
       return { ...state, profileId: action.profileId, stack: [{ name: "events" }] };
 
     case "setEvent":
-      return { ...state, eventId: action.eventId, viewAsId: null, stack: action.stack };
+      return { ...state, eventId: action.eventId, stack: action.stack };
 
     case "log":
       return {
@@ -252,11 +243,8 @@ function reducer(state: LocalState, action: LocalAction): LocalState {
     case "dismissToast":
       return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) };
 
-    case "viewAs":
-      return { ...state, viewAsId: action.userId, stack: [homeFor(action.role)] };
-
-    case "reset":
-      return { ...state, activity: [], toasts: [], viewAsId: null, now: action.now, stack: action.stack };
+    case "logOut":
+      return { ...state, profileId: null, activity: [], toasts: [], stack: [{ name: "welcome" }] };
   }
 }
 
@@ -287,8 +275,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [local, localDispatch] = useReducer(reducer, 0, () => initialState(Date.now()));
 
   const ensureSeed = useMutation(api.seed.ensure);
-  const resetDemo = useMutation(api.seed.resetDemo);
   const createProfile = useMutation(api.profiles.create);
+  const logIn = useMutation(api.profiles.logIn);
   const updateProfile = useMutation(api.profiles.update);
   const claimLegacy = useMutation(api.profiles.claimFromParticipation);
   const ensureCode = useMutation(api.profiles.ensureCode);
@@ -299,13 +287,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const confirmStillHere = useMutation(api.users.confirmStillHere);
   const huddleRespond = useMutation(api.huddles.respond);
   const setHuddleStatus = useMutation(api.huddles.setGroupStatus);
-  const demoHuddle = useMutation(api.huddles.demoPropose);
   const connectByCode = useMutation(api.connections.connectByCode);
   const removeConnection = useMutation(api.connections.remove);
-  const demoFriends = useMutation(api.connections.demoFriends);
   const createRequest = useMutation(api.chatRequests.create);
   const setRequestStatus = useMutation(api.chatRequests.setStatus);
-  const demoLeaveNow = useMutation(api.leaving.demoLeaveNow);
 
   useEffect(() => {
     ensureSeed().catch((e) => console.error("Seeding failed", e));
@@ -326,11 +311,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .catch(() => {})
       .finally(() => setClaiming(false));
   }, [claiming, claimLegacy]);
-  const profileId = local.profileId ?? claimedProfileId;
+  // After logging out, an old browser's claimed profile doesn't come back.
+  const profileId = local.booted ? local.profileId : (local.profileId ?? claimedProfileId);
 
   const eventsRaw = useLatest(useQuery(api.events.list));
-  const profileRaw = useLatest(useQuery(api.profiles.get, profileId ? { profileId } : "skip"));
-  const partsRaw = useLatest(useQuery(api.profiles.participations, profileId ? { profileId } : "skip"));
+  // Not kept across a profile change (log out, log in as someone else).
+  const profileRaw = useQuery(api.profiles.get, profileId ? { profileId } : "skip");
+  const partsRaw = useQuery(api.profiles.participations, profileId ? { profileId } : "skip");
 
   const events = useMemo<EventInfo[]>(
     () =>
@@ -356,14 +343,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [partsRaw],
   );
   const myUserId = participations.find((p) => p.eventId === eventId)?.userId ?? null;
-  const currentUserId = local.viewAsId ?? myUserId;
 
   const current = useLatest(useQuery(api.events.get, eventId ? { eventId } : "skip"));
   const rawUsers = useLatest(
-    useQuery(api.users.listByEvent, eventId ? { eventId: eventId as Id<"events">, viewerId: currentUserId ?? undefined } : "skip"),
+    useQuery(api.users.listByEvent, eventId ? { eventId: eventId as Id<"events">, viewerId: myUserId ?? undefined } : "skip"),
   );
 
-  const viewerId = local.booted ? (currentUserId as Id<"users"> | null) : null;
+  const viewerId = local.booted ? (myUserId as Id<"users"> | null) : null;
   const openLines = useLatest(
     useQuery(api.chatRequests.activeByEvent, eventId ? { eventId: eventId as Id<"events"> } : "skip"),
   );
@@ -464,9 +450,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localDispatch({ type: "boot", profileId: known, eventId, stack });
   }, [local.booted, claiming, eventsRaw, eventId, profileLoaded, profileId, profile, participations]);
 
-  const latest = useRef({ local, users: users ?? [], zones, event, requests, myUserId, currentUserId, participations, profileId });
+  const latest = useRef({ users: users ?? [], event, requests, myUserId, participations, profileId });
   useEffect(() => {
-    latest.current = { local, users: users ?? [], zones, event, requests, myUserId, currentUserId, participations, profileId };
+    latest.current = { users: users ?? [], event, requests, myUserId, participations, profileId };
   });
 
   // Keeps "3 min ago" and countdowns fresh. Leaving itself runs on the server.
@@ -474,6 +460,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const t = setInterval(() => localDispatch({ type: "tick", now: Date.now() }), 10_000);
     return () => clearInterval(t);
   }, []);
+  // Also the moment anyone changes, so a new leaving time is counted from now,
+  // not from up to 10 seconds ago (which showed "11 min" for 10).
+  useEffect(() => {
+    if (rawUsers) localDispatch({ type: "tick", now: Date.now() });
+  }, [rawUsers]);
 
   // Banners for my own requests: accepted, missed because the speaker left,
   // and the 10-minute heads-up the server marks on each open request.
@@ -605,8 +596,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const dispatch = useCallback<Dispatch<Action>>(
     (action) => {
-      const { local, users, event, requests, myUserId, currentUserId, participations, profileId } = latest.current;
-      const meId = currentUserId as Id<"users"> | null;
+      const { users, event, requests, myUserId, participations, profileId } = latest.current;
+      const meId = myUserId as Id<"users"> | null;
       const run = (p: Promise<unknown>) =>
         p.catch((e) => localDispatch({ type: "toast", message: errorMessage(e) }));
       // Only one sign-up step at a time, so a double tap doesn't make two.
@@ -627,6 +618,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
               localDispatch({ type: "setProfile", profileId: id });
             }),
           );
+          return;
+
+        case "logIn":
+          once(() =>
+            logIn({ linkedinUrl: action.linkedinUrl }).then((id) => {
+              save(PROFILE_KEY, id);
+              localDispatch({ type: "setProfile", profileId: id });
+            }),
+          );
+          return;
+
+        case "logOut":
+          save(PROFILE_KEY, null);
+          save(LEGACY_USER_KEY, null);
+          localDispatch({ type: "logOut" });
           return;
 
         case "enterEvent": {
@@ -662,8 +668,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               updateProfile({
                 profileId: profileId as Id<"profiles">,
                 ...profile,
-                // Empty strings clear a link.
-                linkedinUrl: profile.linkedinUrl ?? "",
+                // An empty string clears the other link.
                 contactUrl: profile.contactUrl ?? "",
               }),
               myUserId &&
@@ -694,7 +699,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
 
         case "setLeaving":
-          if (meId) run(setUserStatus({ id: meId, status: "leaving", leavingInMin: action.minutes }));
+          if (!meId) return;
+          localDispatch({ type: "tick", now: Date.now() });
+          run(setUserStatus({ id: meId, status: "leaving", leavingAt: action.leavingAt }));
           return;
 
         case "askStillHere": {
@@ -732,10 +739,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        case "simulateHuddle":
-          if (meId) run(demoHuddle({ attendeeId: meId }));
-          return;
-
         case "connectCode":
           if (!profileId) return;
           run(
@@ -752,18 +755,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (profileId) {
             run(removeConnection({ profileId: profileId as Id<"profiles">, otherId: action.profileId as Id<"profiles"> }));
           }
-          return;
-
-        case "simulateFriends":
-          if (!profileId) return;
-          run(
-            demoFriends({ profileId: profileId as Id<"profiles">, ...at }).then(() =>
-              localDispatch({
-                type: "toast",
-                message: "You're connected with Maya and Leo. You'll see them under Your people at Cal Hacks.",
-              }),
-            ),
-          );
           return;
 
         case "requestChat":
@@ -796,64 +787,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (meId) localDispatch({ ...action, userId: meId });
           return;
 
-        case "viewAs": {
-          const target = users.find((u) => u.id === action.userId);
-          if (target) localDispatch({ type: "viewAs", userId: target.id === myUserId ? null : target.id, role: target.role });
-          return;
-        }
-
-        case "simulateAccept": {
-          const req = requests
-            .filter((r) => r.attendeeId === meId && r.status === "waiting")
-            .sort((a, b) => a.createdAt - b.createdAt)[0];
-          if (!req) {
-            localDispatch({ type: "toast", message: "Send a chat request first, then try this again." });
-            return;
-          }
-          run(
-            setRequestStatus({
-              requestId: req.id as Id<"chatRequests">,
-              actorId: req.panelId as Id<"users">,
-              status: "accepted",
-            }),
-          );
-          return;
-        }
-
-        case "simulateLeaving": {
-          const req = requests.find((r) => r.attendeeId === meId && (r.status === "waiting" || r.status === "accepted"));
-          if (!req) {
-            localDispatch({ type: "toast", message: "Send a chat request first, then try this again." });
-            return;
-          }
-          run(
-            setUserStatus({ id: req.panelId as Id<"users">, status: "leaving", leavingInMin: LEAVE_WARNING_MIN }),
-          );
-          return;
-        }
-
-        case "simulateLeaveNow":
-          if (meId) run(demoLeaveNow({ attendeeId: meId }));
-          return;
-
-        case "reset": {
-          if (!event) return;
-          const mine = participations.find((p) => p.eventId === event.id);
-          const stack: Screen[] = !local.profileId ? [{ name: "welcome" }] : mine ? [homeFor(mine.role)] : [{ name: "events" }];
-          run(
-            resetDemo({ eventId: event.id as Id<"events"> }).then(() =>
-              localDispatch({ type: "reset", now: action.now, stack }),
-            ),
-          );
-          return;
-        }
-
         default:
           localDispatch(action);
       }
     },
     [
       createProfile,
+      logIn,
       updateProfile,
       joinEvent,
       updateUser,
@@ -862,14 +802,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confirmStillHere,
       huddleRespond,
       setHuddleStatus,
-      demoHuddle,
       connectByCode,
       removeConnection,
-      demoFriends,
       createRequest,
       setRequestStatus,
-      demoLeaveNow,
-      resetDemo,
     ],
   );
 
@@ -888,7 +824,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       profileId,
       eventId: event.id,
       myUserId,
-      currentUserId,
       profile,
       events,
       participations,
@@ -900,7 +835,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       stats,
       connections,
     };
-    const me = users.find((u) => u.id === currentUserId);
+    const me = users.find((u) => u.id === myUserId);
     return {
       state,
       me,
@@ -913,7 +848,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     local,
     profileId,
     myUserId,
-    currentUserId,
     profile,
     events,
     participations,

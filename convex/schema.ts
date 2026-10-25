@@ -30,6 +30,8 @@ export default defineSchema({
     name: v.string(),
     headline: v.string(),
     interests: v.array(v.string()),
+    // Required for new profiles (see profiles.cleanLinkedin) and used to log in.
+    // Optional only because older profiles were made without one.
     linkedinUrl: v.optional(v.string()),
     // Any other link (site, GitHub, email).
     contactUrl: v.optional(v.string()),
@@ -42,7 +44,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_connect_code", ["connectCode"])
-    .index("by_seed_key", ["seedKey"]),
+    .index("by_seed_key", ["seedKey"])
+    .index("by_linkedin", ["linkedinUrl"]),
 
   // One person at one event. Chat requests and huddles point at these ids.
   users: defineTable({

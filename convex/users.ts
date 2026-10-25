@@ -7,8 +7,6 @@ import type { Doc, Id } from "./_generated/dataModel";
 // users holds one person's part in one event (role, outfit, zone, status).
 // Who they are lives in their profile; listByEvent joins the two.
 
-const MIN = 60_000;
-
 const shareWithValidator = v.union(v.literal("everyone"), v.literal("connections"), v.literal("nobody"));
 
 export function shareWithOf(u: Doc<"users">) {
@@ -98,23 +96,24 @@ export const confirmStillHere = mutation({
 });
 
 // "available" / "talking" clear any leaving time, which also turns the old
-// leaving jobs into no-ops. "leaving" needs minutes from now.
+// leaving jobs into no-ops. "leaving" needs the time I'm leaving, worked out
+// on my phone when I tap, so the countdown shows exactly what I picked.
 export const setStatus = mutation({
   args: {
     id: v.id("users"),
     status: v.union(v.literal("available"), v.literal("talking"), v.literal("leaving")),
-    leavingInMin: v.optional(v.number()),
+    leavingAt: v.optional(v.number()),
   },
   returns: v.null(),
-  handler: async (ctx, { id, status, leavingInMin }) => {
+  handler: async (ctx, { id, status, leavingAt }) => {
     const user = await ctx.db.get("users", id);
     if (!user) throw new ConvexError("User not found.");
     const now = Date.now();
     if (status === "leaving") {
-      if (leavingInMin === undefined || !(leavingInMin > 0)) {
-        throw new ConvexError("Pick when you're leaving.");
-      }
-      const leavingAt = now + leavingInMin * MIN;
+      if (leavingAt === undefined) throw new ConvexError("Pick when you're leaving.");
+      if (leavingAt <= now) throw new ConvexError("Pick a time later than now.");
+      const event = await ctx.db.get("events", user.eventId);
+      if (event && leavingAt > event.endsAt) throw new ConvexError("Pick a time before the event ends.");
       await ctx.db.patch("users", id, { status, leavingAt, stillHereAskedAt: undefined, updatedAt: now });
       await scheduleLeaving(ctx, id, leavingAt);
     } else {

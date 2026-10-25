@@ -8,7 +8,7 @@ import { Me } from "./screens/Me";
 import { MyRequests } from "./screens/MyRequests";
 import { EditProfile } from "./screens/EditProfile";
 import { Events } from "./screens/Events";
-import { JoinEvent, ProfileSetup } from "./screens/Onboarding";
+import { JoinEvent, LogIn, ProfileSetup } from "./screens/Onboarding";
 import { PanelDetail } from "./screens/PanelDetail";
 import { PanelNow } from "./screens/PanelNow";
 import { Welcome } from "./screens/Welcome";
@@ -68,6 +68,8 @@ function Router() {
       return <Welcome />;
     case "profileSetup":
       return <ProfileSetup />;
+    case "logIn":
+      return <LogIn />;
     case "events":
       return <Events />;
     case "joinEvent":

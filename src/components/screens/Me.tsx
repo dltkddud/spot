@@ -5,7 +5,7 @@ import { OUTFIT_WORD_LIMIT } from "@/lib/mockData";
 import { useApp } from "@/lib/store";
 import { dayTime } from "@/lib/time";
 import { ConnectWithFriends, ShareWithPicker } from "../Connections";
-import { Avatar, Button, Header, inputClass, PillButton, RoleBadge, roleLabel, SectionTitle, StatusPill, ZoneBadge } from "../ui";
+import { Avatar, Button, Header, inputClass, PillButton, RoleBadge, SectionTitle, StatusPill, ZoneBadge } from "../ui";
 
 function wordCount(s: string) {
   return s.trim() ? s.trim().split(/\s+/).length : 0;
@@ -35,17 +35,6 @@ export function Me() {
     { label: "Connections made", value: connectionsMade },
   ];
 
-  // Demo: a speaker and a guest at this event (Dana and Lena at Cal Hacks).
-  const demoPerson = (role: "panel" | "attendee", preferred: string) =>
-    state.users.find((u) => u.seedKey === preferred) ?? state.users.find((u) => u.seedKey && u.role === role);
-  const viewAsOptions = [
-    ...(state.myUserId ? [{ id: state.myUserId, label: "You" }] : []),
-    ...[demoPerson("panel", "p-dana"), demoPerson("attendee", "a-lena")]
-      .filter((u) => !!u)
-      .map((u) => ({ id: u.id, label: `${u.name.split(" ")[0]} (${roleLabel(u.role).toLowerCase()})` })),
-  ];
-  const viewingAsMe = state.currentUserId === state.myUserId;
-
   return (
     <>
       <Header title="Me" />
@@ -71,17 +60,15 @@ export function Me() {
               </span>
             ))}
           </div>
-          {viewingAsMe && (
-            <Button
-              variant="secondary"
-              icon="edit"
-              block
-              className="mt-4"
-              onClick={() => navigate({ name: "editProfile" })}
-            >
-              Edit profile
-            </Button>
-          )}
+          <Button
+            variant="secondary"
+            icon="edit"
+            block
+            className="mt-4"
+            onClick={() => navigate({ name: "editProfile" })}
+          >
+            Edit profile
+          </Button>
         </section>
 
         <SectionTitle>Where you are</SectionTitle>
@@ -143,47 +130,12 @@ export function Me() {
           ))}
         </div>
 
-        <SectionTitle aside="For testing">Demo controls</SectionTitle>
-        <div className="space-y-4 rounded-2xl border border-dashed border-line p-4">
-          <div>
-            <p className="mb-2 text-sm font-bold">View the app as</p>
-            <div className="flex flex-wrap gap-2">
-              {viewAsOptions.map((o) => (
-                <button
-                  key={o.id}
-                  onClick={() => dispatch({ type: "viewAs", userId: o.id })}
-                  className={`rounded-full border px-3.5 py-2 text-sm font-bold ${
-                    state.currentUserId === o.id ? "border-primary bg-primary text-on-primary" : "border-line bg-surface hover:bg-primary-soft"
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <Button variant="secondary" icon="link" block onClick={() => dispatch({ type: "simulateFriends" })}>
-            Connect me with demo friends
-          </Button>
-          {(
-            <div className="grid gap-2">
-              <Button variant="secondary" onClick={() => dispatch({ type: "simulateAccept" })}>
-                A speaker accepts my request
-              </Button>
-              <Button variant="secondary" icon="users" onClick={() => dispatch({ type: "simulateHuddle" })}>
-                Someone in my line wants to huddle
-              </Button>
-              <Button variant="secondary" onClick={() => dispatch({ type: "simulateLeaving" })}>
-                A speaker I&apos;m waiting for leaves in 10 min
-              </Button>
-              <Button variant="secondary" onClick={() => dispatch({ type: "simulateLeaveNow" })}>
-                A speaker I&apos;m waiting for leaves now
-              </Button>
-            </div>
-          )}
-          <Button variant="ghost" icon="refresh" block onClick={() => dispatch({ type: "reset", now: Date.now() })}>
-            Reset demo
-          </Button>
-        </div>
+        <Button variant="ghost" block className="mt-8" onClick={() => dispatch({ type: "logOut" })}>
+          Log out
+        </Button>
+        <p className="mt-1 text-center text-xs text-muted">
+          Log back in anytime with your LinkedIn.
+        </p>
       </main>
     </>
   );
