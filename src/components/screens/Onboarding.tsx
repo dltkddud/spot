@@ -5,7 +5,7 @@ import { looksLikeLinkedin } from "@/lib/links";
 import { INTEREST_OPTIONS, OUTFIT_WORD_LIMIT } from "@/lib/mockData";
 import { useApp, type ProfileInput } from "@/lib/store";
 import type { Role } from "@/lib/types";
-import { Button, Chip, Field, Header, inputClass } from "../ui";
+import { Button, Chip, Field, Header, Icon, inputClass } from "../ui";
 
 const MAX_INTERESTS = 5;
 
@@ -184,6 +184,42 @@ export function EventFields({ value, onChange }: { value: EventDraft; onChange: 
   );
 }
 
+export type MatchDraft = { learnToday: string; canShare: string };
+
+const MATCH_MAX = 140;
+
+// Optional, for AI matching at this event.
+export function MatchInputFields({ value, onChange }: { value: MatchDraft; onChange: (m: MatchDraft) => void }) {
+  return (
+    <div className="space-y-6">
+      <p className="flex items-start gap-2 rounded-xl bg-primary-soft p-3 text-sm font-semibold text-primary-ink">
+        <Icon name="sparkle" size={18} />
+        It&apos;s optional, but it might find you the best person to talk with!
+      </p>
+      <Field label="What I want to learn today" hint={`${value.learnToday.length}/${MATCH_MAX}`}>
+        <textarea
+          className={`${inputClass} min-h-20 resize-none`}
+          value={value.learnToday}
+          onChange={(e) => onChange({ ...value, learnToday: e.target.value })}
+          maxLength={MATCH_MAX}
+          rows={2}
+          placeholder="How to run user interviews on a tight budget"
+        />
+      </Field>
+      <Field label="What I can share" hint={`${value.canShare.length}/${MATCH_MAX}`}>
+        <textarea
+          className={`${inputClass} min-h-20 resize-none`}
+          value={value.canShare}
+          onChange={(e) => onChange({ ...value, canShare: e.target.value })}
+          maxLength={MATCH_MAX}
+          rows={2}
+          placeholder="Lessons from shipping a voice app to 200 users"
+        />
+      </Field>
+    </div>
+  );
+}
+
 export function eventReady(e: EventDraft) {
   const words = wordCount(e.outfit);
   return !!e.role && words > 0 && words <= OUTFIT_WORD_LIMIT;
@@ -217,8 +253,9 @@ export function ProfileSetup() {
 export function JoinEvent({ eventId }: { eventId: string }) {
   const { state, dispatch, back } = useApp();
   const event = state.events.find((e) => e.id === eventId);
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [draft, setDraft] = useState<EventDraft>({ role: null, talkTitle: "", outfit: "" });
+  const [match, setMatch] = useState<MatchDraft>({ learnToday: "", canShare: "" });
   const [visible, setVisible] = useState(true);
 
   if (step === 1) {
@@ -239,9 +276,37 @@ export function JoinEvent({ eventId }: { eventId: string }) {
     );
   }
 
+  if (step === 2) {
+    return (
+      <>
+        <Header title={event?.name ?? "Join the event"} onBack={() => setStep(1)} />
+        <main className="px-5 pb-12 pt-6">
+          <h2 className="text-2xl font-black">What brings you here today?</h2>
+          <div className="mt-6">
+            <MatchInputFields value={match} onChange={setMatch} />
+          </div>
+          <div className="mt-8 grid grid-cols-[auto_1fr] gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setMatch({ learnToday: "", canShare: "" });
+                setStep(3);
+              }}
+            >
+              Skip
+            </Button>
+            <Button icon="arrow" onClick={() => setStep(3)}>
+              Continue
+            </Button>
+          </div>
+        </main>
+      </>
+    );
+  }
+
   return (
     <>
-      <Header title={event?.name ?? "Join the event"} onBack={() => setStep(1)} />
+      <Header title={event?.name ?? "Join the event"} onBack={() => setStep(2)} />
       <main className="space-y-6 px-5 pb-12 pt-6">
         <EventFields value={draft} onChange={setDraft} />
 
@@ -274,11 +339,36 @@ export function JoinEvent({ eventId }: { eventId: string }) {
                 talkTitle: draft.talkTitle.trim() || undefined,
                 outfit: draft.outfit.trim(),
                 visible,
+                learnToday: match.learnToday.trim() || undefined,
+                canShare: match.canShare.trim() || undefined,
               },
             })
           }
         >
           Choose my zone
+        </Button>
+      </main>
+    </>
+  );
+}
+
+// From the AI matches prompt in Explore: just the two match fields.
+export function MatchInput() {
+  const { me, dispatch, back } = useApp();
+  const [match, setMatch] = useState<MatchDraft>({ learnToday: me?.learnToday ?? "", canShare: me?.canShare ?? "" });
+  return (
+    <>
+      <Header title="What brings you here today?" onBack={back} />
+      <main className="px-5 pb-28 pt-6">
+        <MatchInputFields value={match} onChange={setMatch} />
+        <Button
+          block
+          icon="sparkle"
+          className="mt-8"
+          disabled={!match.learnToday.trim() && !match.canShare.trim()}
+          onClick={() => dispatch({ type: "saveMatchInputs", learnToday: match.learnToday, canShare: match.canShare })}
+        >
+          Find my matches
         </Button>
       </main>
     </>

@@ -6,11 +6,13 @@ import { Button, Header, SectionTitle } from "../ui";
 import {
   EventFields,
   eventReady,
+  MatchInputFields,
   ProfileFields,
   profileReady,
   RolePicker,
   toProfileInput,
   type EventDraft,
+  type MatchDraft,
   type ProfileDraft,
 } from "./Onboarding";
 
@@ -30,6 +32,7 @@ export function EditProfile() {
     talkTitle: me?.talkTitle ?? "",
     outfit: me?.outfit ?? "",
   });
+  const [match, setMatch] = useState<MatchDraft>({ learnToday: me?.learnToday ?? "", canShare: me?.canShare ?? "" });
   const [confirming, setConfirming] = useState(false);
   if (!profile || !me) return null;
 
@@ -48,7 +51,13 @@ export function EditProfile() {
     dispatch({
       type: "saveProfile",
       profile: toProfileInput(draft),
-      here: { role: here.role, talkTitle: here.talkTitle.trim() || undefined, outfit: here.outfit.trim() },
+      here: {
+        role: here.role,
+        talkTitle: here.talkTitle.trim() || undefined,
+        outfit: here.outfit.trim(),
+        learnToday: match.learnToday,
+        canShare: match.canShare,
+      },
     });
   };
 
@@ -69,6 +78,9 @@ export function EditProfile() {
         />
         <div className="mt-6">
           <EventFields value={here} onChange={setHere} />
+        </div>
+        <div className="mt-6">
+          <MatchInputFields value={match} onChange={setMatch} />
         </div>
 
         {confirming ? (

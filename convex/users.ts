@@ -109,6 +109,8 @@ const personValidator = v.object({
   requestsPaused: v.boolean(),
   updatedAt: v.number(),
   seedKey: v.optional(v.string()),
+  learnToday: v.optional(v.string()),
+  canShare: v.optional(v.string()),
   // From the profile.
   name: v.string(),
   headline: v.string(),
@@ -165,6 +167,8 @@ export const listByEvent = query({
         requestsPaused: u.requestsPaused,
         updatedAt: u.updatedAt,
         seedKey: u.seedKey,
+        learnToday: u.learnToday,
+        canShare: u.canShare,
         name: profile.name,
         headline: profile.headline,
         interests: profile.interests,

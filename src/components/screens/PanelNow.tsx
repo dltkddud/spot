@@ -5,6 +5,7 @@ import { queueFor, useApp } from "@/lib/store";
 import { clockTime, minutesAgo, minutesUntil } from "@/lib/time";
 import type { ChatRequest, Huddle } from "@/lib/types";
 import { PanelHuddleCard } from "../Huddle";
+import { MatchInbox } from "../Matches";
 import { Avatar, Button, Icon, SectionTitle } from "../ui";
 import { MyBar } from "./Discover";
 
@@ -108,6 +109,8 @@ export function PanelNow() {
       <div className="mt-4">
         <MyBar />
       </div>
+
+      <MatchInbox title="Match requests" />
 
       <SectionTitle
         aside={

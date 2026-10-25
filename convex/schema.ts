@@ -1,6 +1,24 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+export const matchDirection = v.union(
+  v.literal("they_can_help_you"),
+  v.literal("you_can_help_them"),
+  v.literal("both"),
+);
+
+// One AI match as shown to the person it was found for ("you"). otherId is "them".
+export const matchSuggestion = v.object({
+  otherId: v.id("users"),
+  direction: matchDirection,
+  pairSummary: v.string(),
+  reasonForMe: v.string(),
+  reasonForThem: v.string(),
+  questionForMe: v.string(),
+  questionForThem: v.string(),
+  basedOn: v.array(v.string()),
+});
+
 export default defineSchema({
   events: defineTable({
     name: v.string(),
@@ -67,6 +85,9 @@ export default defineSchema({
     updatedAt: v.number(),
     // Demo people created by seed keep their mockData id here (e.g. "p-dana").
     seedKey: v.optional(v.string()),
+    // Optional, for AI matching: "What I want to learn today" / "What I can share". Max 140 chars.
+    learnToday: v.optional(v.string()),
+    canShare: v.optional(v.string()),
 
     // Moved to profiles by the profiles-and-events migration in seed.ts, which
     // also clears them. Delete these once both deployments have run it.
@@ -172,6 +193,53 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_user_and_other", ["userId", "otherId"]),
 
+  // The AI matches last found for someone at an event, and the input they
+  // came from (key), so the same input shows them again without asking Claude.
+  matchSets: defineTable({
+    eventId: v.id("events"),
+    userId: v.id("users"),
+    key: v.string(),
+    source: v.union(v.literal("claude"), v.literal("interests")),
+    items: v.array(matchSuggestion),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  // A suggested 10-minute chat between two people at an event: proposed by one
+  // from their AI matches, accepted by the other, then started and timed.
+  matches: defineTable({
+    eventId: v.id("events"),
+    fromId: v.id("users"),
+    toId: v.id("users"),
+    status: v.union(
+      v.literal("proposed"),
+      v.literal("accepted"),
+      v.literal("declined"),
+      v.literal("expired"),
+      v.literal("started"),
+      v.literal("done"),
+      v.literal("cancelled"),
+    ),
+    // The AI result, written from the sender's side: "you" is fromId, "them" is toId.
+    direction: matchDirection,
+    pairSummary: v.string(),
+    reasonForFrom: v.string(),
+    reasonForTo: v.string(),
+    questionForFrom: v.string(),
+    questionForTo: v.string(),
+    basedOn: v.array(v.string()),
+    source: v.union(v.literal("claude"), v.literal("interests"), v.literal("demo")),
+    createdAt: v.number(),
+    respondedAt: v.optional(v.number()),
+    // Where to meet: the receiver's zone when they said yes (or the sender's).
+    meetZoneId: v.optional(v.id("zones")),
+    startedAt: v.optional(v.number()),
+    endsAt: v.optional(v.number()),
+    // People who closed the "Time's up" card.
+    wrappedUp: v.array(v.id("users")),
+  })
+    .index("by_from_and_status", ["fromId", "status"])
+    .index("by_to_and_status", ["toId", "status"]),
+
   // One row per data migration that has run, so seed.ensure runs each only once.
   migrations: defineTable({
     name: v.string(),
@@ -190,6 +258,9 @@ export default defineSchema({
       v.literal("huddle_proposed"),
       v.literal("huddle_formed"),
       v.literal("connection_made"),
+      v.literal("match_suggested"),
+      v.literal("match_accepted"),
+      v.literal("match_completed"),
     ),
     userId: v.id("users"),
     targetId: v.optional(v.id("users")),

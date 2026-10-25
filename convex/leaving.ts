@@ -4,6 +4,7 @@ import { internalMutation, mutation, type MutationCtx } from "./_generated/serve
 import type { Id } from "./_generated/dataModel";
 import { LEAVE_WARNING_MIN } from "../src/lib/time";
 import { dissolveAllFor } from "./huddles";
+import { cancelMatchesFor } from "./matches";
 
 const MIN = 60_000;
 
@@ -56,13 +57,15 @@ export const warn = internalMutation({
   },
 });
 
-// At leavingAt: huddles break up, open requests become missed, the speaker is hidden and their zone cleared.
+// At leavingAt: huddles break up, open requests become missed, open 10-min chats are
+// cancelled, the speaker is hidden and their zone cleared.
 export const leave = internalMutation({
   args: { userId: v.id("users"), leavingAt: v.number() },
   returns: v.null(),
   handler: async (ctx, { userId, leavingAt }) => {
     if (!(await stillLeavingAt(ctx, userId, leavingAt))) return null;
     await closeLine(ctx, userId);
+    await cancelMatchesFor(ctx, userId);
     await ctx.db.patch("users", userId, {
       visible: false,
       shareWith: "nobody",

@@ -16,6 +16,8 @@ import type * as followUps from "../followUps.js";
 import type * as followUpsNode from "../followUpsNode.js";
 import type * as huddles from "../huddles.js";
 import type * as leaving from "../leaving.js";
+import type * as matches from "../matches.js";
+import type * as matchesNode from "../matchesNode.js";
 import type * as profiles from "../profiles.js";
 import type * as seed from "../seed.js";
 import type * as users from "../users.js";
@@ -35,6 +37,8 @@ declare const fullApi: ApiFromModules<{
   followUpsNode: typeof followUpsNode;
   huddles: typeof huddles;
   leaving: typeof leaving;
+  matches: typeof matches;
+  matchesNode: typeof matchesNode;
   profiles: typeof profiles;
   seed: typeof seed;
   users: typeof users;

@@ -54,9 +54,11 @@ export const join = mutation({
     talkTitle: v.optional(v.string()),
     outfit: v.string(),
     visible: v.boolean(),
+    learnToday: v.optional(v.string()),
+    canShare: v.optional(v.string()),
   },
   returns: v.id("users"),
-  handler: async (ctx, { eventId, profileId, role, talkTitle, outfit, visible }) => {
+  handler: async (ctx, { eventId, profileId, role, talkTitle, outfit, visible, learnToday, canShare }) => {
     if (!(await ctx.db.get("events", eventId))) throw new ConvexError("That event doesn't exist.");
     if (!(await ctx.db.get("profiles", profileId))) throw new ConvexError("Profile not found.");
     const existing = await ctx.db
@@ -74,6 +76,8 @@ export const join = mutation({
       visible,
       shareWith: visible ? "everyone" : "nobody",
       requestsPaused: false,
+      learnToday: learnToday?.trim().slice(0, 140) || undefined,
+      canShare: canShare?.trim().slice(0, 140) || undefined,
       updatedAt: Date.now(),
     });
   },

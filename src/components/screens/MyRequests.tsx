@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { positionInQueue, useApp } from "@/lib/store";
 import { FollowUp } from "../FollowUp";
+import { MatchInbox } from "../Matches";
 import { HuddleCard, huddleForRequest } from "../Huddle";
 import { minutesAgo } from "@/lib/time";
 import type { ChatRequest } from "@/lib/types";
@@ -68,6 +69,7 @@ export function MyRequests() {
     <>
       <Header title="My requests" />
       <main className="px-5 pb-28 pt-2">
+        {me.role === "attendee" && <MatchInbox title="10-min chats" />}
         {mine.length === 0 && (
           <div className="mt-8 rounded-2xl border border-dashed border-line p-6 text-center">
             <p className="font-extrabold">No requests yet</p>

@@ -21,6 +21,9 @@ export type MockPerson = {
   shareWith?: ShareWith;
   requestsPaused: boolean;
   updatedAt: number;
+  // What they want to learn and can share today (see MATCH_INPUTS).
+  learnToday?: string;
+  canShare?: string;
 };
 
 export type MockZone = Zone & { icon: ZoneIcon };
@@ -265,9 +268,7 @@ export function makeUsers(now: number): MockPerson[] {
       outfit: "black turtleneck, canvas tote",
       zoneId: "z-theater",
       status: "available",
-      // Shares their zone only with connections; "Connect me with demo friends" reveals it.
-      visible: false,
-      shareWith: "connections",
+      visible: true,
       requestsPaused: false,
       updatedAt: now - 2 * MIN,
     },
@@ -280,7 +281,9 @@ export function makeUsers(now: number): MockPerson[] {
       outfit: "white blazer, red backpack",
       zoneId: "z-theater",
       status: "available",
+      // Shares their zone only with connections; "Connect demo friends" reveals it.
       visible: false,
+      shareWith: "connections",
       requestsPaused: false,
       updatedAt: now - 9 * MIN,
     },
@@ -519,3 +522,60 @@ export const EVENTS: MockEvent[] = [
     ],
   },
 ];
+
+// What demo people want to learn and can share today, by seed key. Leo and
+// Maya are the clearest AI match: Maya wants user research advice and Leo can
+// share it. Writing something like "How to run user interviews on a tight
+// budget" as "What I want to learn today" also finds Leo.
+export const MATCH_INPUTS: Record<string, { learnToday?: string; canShare?: string }> = {
+  "p-dana": {
+    learnToday: "How students would use a voice agent day to day",
+    canShare: "How to stop a voice agent from talking over people",
+  },
+  "p-priya": {
+    learnToday: "What makes a first-time hacker's demo easy to understand",
+    canShare: "How to design a screen people only glance at",
+  },
+  "p-marco": { canShare: "How to turn public satellite data into a product" },
+  "p-sofia": {
+    learnToday: "How small teams check their models for bias",
+    canShare: "A simple checklist for evaluating an LLM before launch",
+  },
+  "p-kenji": { canShare: "Picking cheap motors and sensors for a first robot" },
+  "p-ahmed": {
+    learnToday: "What new grads wish their first manager knew",
+    canShare: "How I went from intern to engineering manager in four years",
+  },
+  "a-lena": {
+    learnToday: "How to make a voice app feel natural to talk to",
+    canShare: "What I learned building a voice journaling app in React",
+  },
+  "a-tomas": { learnToday: "Which bias tests are worth running on a small model", canShare: "Pandas tricks for messy survey data" },
+  "a-aisha": { learnToday: "What to build first as a frontend beginner" },
+  "a-maya": {
+    learnToday: "User research advice for my first portfolio project",
+    canShare: "How I landed frontend interviews after a bootcamp",
+  },
+  "a-omar": { learnToday: "How to price an agent product for labs", canShare: "Booking flows for shared lab equipment" },
+  "a-jin": { canShare: "Soldering and wiring tips for hardware beginners" },
+  "a-sara": { learnToday: "How to present climate data so people act on it" },
+  "a-leo": {
+    learnToday: "How engineers like to receive design feedback",
+    canShare: "How I ran 15 user interviews for a class project with no budget",
+  },
+  "a-nina": { learnToday: "What engineering managers look for in interns" },
+  "fc-grace": {
+    learnToday: "What student founders struggle with most",
+    canShare: "What I look for before writing a first check",
+  },
+  "fc-ben": { canShare: "How we found our first 100 customers with cold emails" },
+  "fc-hana": { learnToday: "How early is too early to talk to investors", canShare: "Running quick design sprints" },
+  "fc-diego": { learnToday: "How fintech startups pick their first market" },
+  "rx-ravi": { canShare: "Safety checks for robots that work next to people" },
+  "rx-elena": {
+    learnToday: "Cheap kits that keep teens interested in robotics",
+    canShare: "Running a robotics club on a tiny budget",
+  },
+  "rx-sam": { learnToday: "Which sensors to start with for a first robot" },
+  "rx-mia": { learnToday: "How to plan robot tasks with an LLM agent", canShare: "Prompt patterns for planning agents" },
+};

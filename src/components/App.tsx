@@ -8,7 +8,7 @@ import { Me } from "./screens/Me";
 import { MyRequests } from "./screens/MyRequests";
 import { EditProfile } from "./screens/EditProfile";
 import { Events } from "./screens/Events";
-import { JoinEvent, ProfileSetup } from "./screens/Onboarding";
+import { JoinEvent, MatchInput, ProfileSetup } from "./screens/Onboarding";
 import { PanelDetail } from "./screens/PanelDetail";
 import { PanelNow } from "./screens/PanelNow";
 import { Welcome } from "./screens/Welcome";
@@ -74,6 +74,8 @@ function Router() {
       return <JoinEvent key={screen.eventId} eventId={screen.eventId} />;
     case "editProfile":
       return withTabs(<EditProfile key={me?.id} />);
+    case "matchInput":
+      return withTabs(<MatchInput key={me?.id} />);
     case "zonePicker":
       return screen.fromOnboarding ? <ZonePicker fromOnboarding /> : withTabs(<ZonePicker />);
     case "explore":

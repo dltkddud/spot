@@ -30,6 +30,7 @@ const iconPaths = {
       <path d="M12 8v4l2.5 2.5" />
     </>
   ),  chevron: <path d="M7 10l5 5 5-5" />,
+  sparkle: <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z" />,
   linkedin: (
     <>
       <rect x="3" y="3" width="18" height="18" rx="4" />
@@ -353,7 +354,7 @@ export function TabBar() {
 
   // Guests: Explore / Requests / Me. Speakers add Now, their own line, in front.
   const shared: Tab[] = [
-    { label: "Explore", screen: { name: "explore" }, match: ["explore", "zoneDetail", "panelDetail"], icon: icons.explore },
+    { label: "Explore", screen: { name: "explore" }, match: ["explore", "zoneDetail", "panelDetail", "matchInput"], icon: icons.explore },
     { label: "Requests", screen: { name: "requests" }, match: ["requests"], icon: icons.requests, badge: myActive },
     { label: "Me", screen: { name: "me" }, match: ["me", "zonePicker", "editProfile"], icon: icons.me },
   ];

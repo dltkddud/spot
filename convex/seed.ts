@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, type MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { CAL_HACKS_KEY, EVENTS, type MockEvent } from "../src/lib/mockData";
+import { CAL_HACKS_KEY, EVENTS, MATCH_INPUTS, type MockEvent } from "../src/lib/mockData";
 import { scheduleEventEnd } from "./events";
 import { scheduleLeaving } from "./leaving";
 import { proposeFor } from "./huddles";
@@ -134,6 +134,8 @@ async function placeDemoPeople(
       requestsPaused: p.requestsPaused,
       updatedAt: p.updatedAt,
       seedKey: p.id,
+      learnToday: MATCH_INPUTS[p.id]?.learnToday,
+      canShare: MATCH_INPUTS[p.id]?.canShare,
     };
     const row = await ctx.db
       .query("users")
@@ -146,15 +148,24 @@ async function placeDemoPeople(
   return userIds;
 }
 
-// Keeps demo people's profiles (name, one line, interests, links) in line with
-// mockData without moving them around the event.
-async function syncDemoProfiles(ctx: MutationCtx, mock: MockEvent, now: number) {
+// Keeps demo people's profiles (name, one line, interests, links) and what
+// they want to learn and can share in line with mockData, without moving them
+// around the event.
+async function syncDemoProfiles(ctx: MutationCtx, eventId: Id<"events">, mock: MockEvent, now: number) {
   for (const p of mock.people(now)) {
     const profile = await ctx.db
       .query("profiles")
       .withIndex("by_seed_key", (q) => q.eq("seedKey", p.id))
       .first();
     if (!profile) continue;
+    const here = await ctx.db
+      .query("users")
+      .withIndex("by_profile_and_event", (q) => q.eq("profileId", profile._id).eq("eventId", eventId))
+      .first();
+    const { learnToday, canShare } = MATCH_INPUTS[p.id] ?? {};
+    if (here && (here.learnToday !== learnToday || here.canShare !== canShare)) {
+      await ctx.db.patch("users", here._id, { learnToday, canShare });
+    }
     const same =
       profile.name === p.name &&
       profile.headline === p.headline &&
@@ -219,8 +230,8 @@ async function primeDemoHuddles(ctx: MutationCtx, userIds: Record<string, Id<"us
   }
 }
 
-// Removes huddles that involve demo people at this event, and connections
-// that involve their profiles.
+// Removes huddles and 10-minute chats that involve demo people at this event,
+// their saved AI matches, and connections that involve their profiles.
 async function clearDemoSocial(ctx: MutationCtx, demoIds: Set<Id<"users">>) {
   const huddleIds = new Set<Id<"huddles">>();
   for (const userId of demoIds) {
@@ -234,6 +245,21 @@ async function clearDemoSocial(ctx: MutationCtx, demoIds: Set<Id<"users">>) {
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .take(500);
     asMember.forEach((m) => huddleIds.add(m.huddleId));
+
+    // 10-minute chats and saved AI matches that involve them.
+    for (const index of ["by_from_and_status", "by_to_and_status"] as const) {
+      const field = index === "by_from_and_status" ? "fromId" : "toId";
+      const rows = await ctx.db
+        .query("matches")
+        .withIndex(index, (q) => q.eq(field, userId))
+        .take(500);
+      for (const m of rows) await ctx.db.delete("matches", m._id);
+    }
+    const sets = await ctx.db
+      .query("matchSets")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .take(10);
+    for (const set of sets) await ctx.db.delete("matchSets", set._id);
 
     const profileId = (await ctx.db.get("users", userId))?.profileId;
     if (!profileId) continue;
@@ -276,7 +302,7 @@ async function ensureEvent(ctx: MutationCtx, mock: MockEvent, now: number) {
     const changed = (Object.keys(details) as (keyof typeof details)[]).some((k) => existing[k] !== details[k]);
     if (changed) await ctx.db.patch("events", existing._id, details);
     await syncZones(ctx, existing._id, mock);
-    await syncDemoProfiles(ctx, mock, now);
+    await syncDemoProfiles(ctx, existing._id, mock, now);
     await scheduleEventEnd(ctx, existing._id);
     return;
   }
