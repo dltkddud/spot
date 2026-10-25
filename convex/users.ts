@@ -63,6 +63,8 @@ export const update = mutation({
       ...(stopsSpeaking && { status: "available" as const, leavingAt: undefined, requestsPaused: false }),
       // Any update answers a pending "Still here?", and means I'm back if I'd left.
       stillHereAskedAt: undefined,
+      // Updating from a phone that's still logged in means I'm on Spot.
+      loggedOut: undefined,
       leftFrom: undefined,
       updatedAt: Date.now(),
     });
@@ -123,10 +125,17 @@ export const setStatus = mutation({
       if (leavingAt <= now) throw new ConvexError("Pick a time later than now.");
       const event = await ctx.db.get("events", user.eventId);
       if (event && leavingAt > event.endsAt) throw new ConvexError("Pick a time before the event ends.");
-      await ctx.db.patch("users", id, { status, leavingAt, stillHereAskedAt: undefined, updatedAt: now });
+      await ctx.db.patch("users", id, { status, leavingAt, stillHereAskedAt: undefined, loggedOut: undefined, updatedAt: now });
       await scheduleLeaving(ctx, id, leavingAt);
     } else {
-      await ctx.db.patch("users", id, { status, leavingAt: undefined, stillHereAskedAt: undefined, leftFrom: undefined, updatedAt: now });
+      await ctx.db.patch("users", id, {
+        status,
+        leavingAt: undefined,
+        stillHereAskedAt: undefined,
+        leftFrom: undefined,
+        loggedOut: undefined,
+        updatedAt: now,
+      });
     }
     return null;
   },
@@ -189,7 +198,9 @@ export const listByEvent = query({
       const profile = await ctx.db.get("profiles", u.profileId);
       if (!profile) continue;
       const share = shareWithOf(u);
-      const seen = u._id === viewer?._id || share === "everyone" || (share === "connections" && connected.has(u.profileId));
+      const seen =
+        u._id === viewer?._id ||
+        (!u.loggedOut && (share === "everyone" || (share === "connections" && connected.has(u.profileId))));
       out.push({
         _id: u._id,
         _creationTime: u._creationTime,

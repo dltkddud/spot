@@ -177,14 +177,37 @@ export const update = mutation({
   },
 });
 
+async function setLoggedOut(ctx: MutationCtx, profileId: Id<"profiles">, loggedOut: boolean) {
+  const mine = await ctx.db
+    .query("users")
+    .withIndex("by_profile_and_event", (q) => q.eq("profileId", profileId))
+    .take(100);
+  for (const u of mine) {
+    if (!!u.loggedOut !== loggedOut) await ctx.db.patch("users", u._id, { loggedOut: loggedOut || undefined });
+  }
+}
+
 // "Log in": no passwords at a hackathon, so the LinkedIn link finds the profile.
+// Logging back in shows me at my events again.
 export const logIn = mutation({
   args: { linkedinUrl: v.string() },
   returns: v.id("profiles"),
   handler: async (ctx, { linkedinUrl }) => {
     const profile = await profileWithLinkedin(ctx, cleanLinkedin(linkedinUrl));
     if (!profile) throw new ConvexError("No profile with that LinkedIn yet. Get started to make one.");
+    await setLoggedOut(ctx, profile._id, false);
     return profile._id;
+  },
+});
+
+// "Log out": I disappear from every event's lists and map until I log back in.
+// Requests already open stay as they are.
+export const logOut = mutation({
+  args: { profileId: v.id("profiles") },
+  returns: v.null(),
+  handler: async (ctx, { profileId }) => {
+    await setLoggedOut(ctx, profileId, true);
+    return null;
   },
 });
 

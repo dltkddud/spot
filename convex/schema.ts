@@ -88,6 +88,9 @@ export default defineSchema({
     updatedAt: v.number(),
     // Someone tapped "Still here?" on my stale zone. Cleared once I confirm or update anything.
     stillHereAskedAt: v.optional(v.number()),
+    // They logged out on their phone: hidden from everyone and can't get new
+    // requests until they log back in (profiles.logIn clears it).
+    loggedOut: v.optional(v.boolean()),
     // Old demo people only (e.g. "p-dana"); the remove-demo-people migration deletes them.
     seedKey: v.optional(v.string()),
     // Set when a speaker's leaving time came (or they tapped Leaving now): where

@@ -41,7 +41,7 @@ export const create = mutation({
     const panelProfile = panel.profileId ? await ctx.db.get("profiles", panel.profileId) : null;
     const first = panelProfile?.name.split(" ")[0] ?? "They";
     if (attendeeId === panelId) throw new ConvexError("You can't request a chat with yourself.");
-    if (!panel.visible) throw new ConvexError(`${first} has left the event floor.`);
+    if (!panel.visible || panel.loggedOut) throw new ConvexError(`${first} has left the event floor.`);
     if (panel.requestsPaused) throw new ConvexError(`${first} paused requests.`);
 
     const mine = await ctx.db

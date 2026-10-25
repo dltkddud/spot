@@ -297,6 +297,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const syncClock = useMutation(api.clock.now);
   const createProfile = useMutation(api.profiles.create);
   const logIn = useMutation(api.profiles.logIn);
+  const logOutProfile = useMutation(api.profiles.logOut);
   const updateProfile = useMutation(api.profiles.update);
   const claimLegacy = useMutation(api.profiles.claimFromParticipation);
   const ensureCode = useMutation(api.profiles.ensureCode);
@@ -737,6 +738,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
 
         case "logOut":
+          if (profileId) logOutProfile({ profileId: profileId as Id<"profiles"> }).catch(() => {});
           save(PROFILE_KEY, null);
           save(LEGACY_USER_KEY, null);
           localDispatch({ type: "logOut" });
@@ -952,6 +954,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       createProfile,
       logIn,
+      logOutProfile,
       updateProfile,
       joinEvent,
       updateUser,

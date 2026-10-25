@@ -110,7 +110,7 @@ async function poolOf(ctx: QueryCtx, panelId: Id<"users">, busy: Set<Id<"chatReq
   for (const request of waiting) {
     if (busy.has(request._id)) continue;
     const user = await ctx.db.get("users", request.attendeeId);
-    if (!user) continue;
+    if (!user || user.loggedOut) continue;
     const profile = user.profileId ? await ctx.db.get("profiles", user.profileId) : null;
     if (profile?.openToHuddles !== false) pool.push({ request, user, interests: profile?.interests ?? [], profile });
   }
