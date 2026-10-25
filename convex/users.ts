@@ -60,8 +60,9 @@ export const update = mutation({
       ...(role !== undefined && { role }),
       ...(talkTitle !== undefined && { talkTitle: talkTitle.trim() || undefined }),
       ...(stopsSpeaking && { status: "available" as const, leavingAt: undefined, requestsPaused: false }),
-      // Any update answers a pending "Still here?".
+      // Any update answers a pending "Still here?", and means I'm back if I'd left.
       stillHereAskedAt: undefined,
+      leftFrom: undefined,
       updatedAt: Date.now(),
     });
     return null;
@@ -118,7 +119,7 @@ export const setStatus = mutation({
       await ctx.db.patch("users", id, { status, leavingAt, stillHereAskedAt: undefined, updatedAt: now });
       await scheduleLeaving(ctx, id, leavingAt);
     } else {
-      await ctx.db.patch("users", id, { status, leavingAt: undefined, stillHereAskedAt: undefined, updatedAt: now });
+      await ctx.db.patch("users", id, { status, leavingAt: undefined, stillHereAskedAt: undefined, leftFrom: undefined, updatedAt: now });
     }
     return null;
   },

@@ -65,17 +65,6 @@ async function formIfReady(ctx: MutationCtx, huddleId: Id<"huddles">) {
   await record(ctx, huddle.eventId, "huddle_formed", members[0].userId, huddle.panelId);
 }
 
-// Demo people can't tap buttons, so they say yes whenever a real person is in the huddle.
-async function demoSaysYes(ctx: MutationCtx, huddleId: Id<"huddles">) {
-  const members = await membersOf(ctx, huddleId);
-  const users = await Promise.all(members.map((m) => ctx.db.get("users", m.userId)));
-  if (!users.some((u) => u && !u.seedKey)) return;
-  for (const [i, m] of members.entries()) {
-    if (users[i]?.seedKey && m.response === "pending") await ctx.db.patch("huddleMembers", m._id, { response: "yes" });
-  }
-  await formIfReady(ctx, huddleId);
-}
-
 async function interestsOf(ctx: QueryCtx, user: Doc<"users">) {
   const profile = user.profileId ? await ctx.db.get("profiles", user.profileId) : null;
   return { interests: profile?.interests ?? [], open: profile?.openToHuddles !== false };
@@ -152,7 +141,6 @@ export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
     }
     if (!added) continue;
     await ctx.db.patch("huddles", huddle._id, { sharedInterests: shared });
-    await demoSaysYes(ctx, huddle._id);
   }
 
   while (pool.length >= 2) {
@@ -175,7 +163,6 @@ export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
     });
     for (const c of group) await addMember(ctx, huddleId, c);
     await record(ctx, panel.eventId, "huddle_proposed", first.user._id, panelId);
-    await demoSaysYes(ctx, huddleId);
   }
 }
 
@@ -254,77 +241,6 @@ export const setGroupStatus = mutation({
     if (status === "met") await end(ctx, huddle, "met");
     else if (status !== "accepted") await end(ctx, huddle, "dissolved");
     return null;
-  },
-});
-
-// Demo control: someone in my line who shares an interest wants to huddle.
-// Picks a demo attendee, puts them in the same line if needed, and proposes.
-export const demoPropose = mutation({
-  args: { attendeeId: v.id("users") },
-  returns: v.null(),
-  handler: async (ctx, { attendeeId }) => {
-    const me = await ctx.db.get("users", attendeeId);
-    if (!me) throw new ConvexError("User not found.");
-    const myInterests = (await interestsOf(ctx, me)).interests;
-    const mine = (
-      await ctx.db
-        .query("chatRequests")
-        .withIndex("by_attendee", (q) => q.eq("attendeeId", attendeeId))
-        .take(200)
-    )
-      .filter((r) => r.status === "waiting")
-      .sort((a, b) => a.createdAt - b.createdAt);
-    if (mine.length === 0) throw new ConvexError("Send a chat request first, then try this again.");
-
-    for (const request of mine) {
-      if (await openHuddleOf(ctx, request._id)) continue;
-      const guests = (
-        await ctx.db
-          .query("users")
-          .withIndex("by_event_role", (q) => q.eq("eventId", me.eventId).eq("role", "attendee"))
-          .take(500)
-      ).filter((u) => u.seedKey && u._id !== me._id);
-      const demo = [];
-      for (const u of guests) {
-        const shared = overlap(myInterests, (await interestsOf(ctx, u)).interests);
-        if (shared.length > 0) demo.push({ u, shared });
-      }
-      demo.sort((a, b) => b.shared.length - a.shared.length);
-
-      for (const { u, shared } of demo) {
-        const theirs = await ctx.db
-          .query("chatRequests")
-          .withIndex("by_attendee", (q) => q.eq("attendeeId", u._id))
-          .take(200);
-        let theirRequest = theirs.find((r) => r.panelId === request.panelId && r.status === "waiting");
-        if (theirRequest && (await openHuddleOf(ctx, theirRequest._id))) continue;
-        if (theirs.some((r) => r.panelId === request.panelId && r.status === "accepted")) continue;
-        if (!theirRequest) {
-          const id = await ctx.db.insert("chatRequests", {
-            eventId: me.eventId,
-            panelId: request.panelId,
-            attendeeId: u._id,
-            note: `Curious what you think about ${shared[0]}.`,
-            status: "waiting",
-            createdAt: Date.now(),
-          });
-          theirRequest = (await ctx.db.get("chatRequests", id))!;
-        }
-        const huddleId = await ctx.db.insert("huddles", {
-          eventId: me.eventId,
-          panelId: request.panelId,
-          status: "proposed",
-          sharedInterests: shared,
-          createdAt: Date.now(),
-        });
-        await addMember(ctx, huddleId, { request, user: me });
-        await addMember(ctx, huddleId, { request: theirRequest, user: u });
-        await record(ctx, me.eventId, "huddle_proposed", u._id, request.panelId);
-        await demoSaysYes(ctx, huddleId);
-        return null;
-      }
-    }
-    throw new ConvexError("No one in your lines shares your interests right now.");
   },
 });
 

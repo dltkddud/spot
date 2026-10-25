@@ -5,6 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { LEAVE_WARNING_MIN } from "../src/lib/time";
 import { dissolveAllFor } from "./huddles";
 import { cancelMatchesFor } from "./matches";
+import { shareWithOf } from "./users";
 
 const MIN = 60_000;
 
@@ -63,10 +64,12 @@ export const leave = internalMutation({
   args: { userId: v.id("users"), leavingAt: v.number() },
   returns: v.null(),
   handler: async (ctx, { userId, leavingAt }) => {
-    if (!(await stillLeavingAt(ctx, userId, leavingAt))) return null;
+    const user = await stillLeavingAt(ctx, userId, leavingAt);
+    if (!user) return null;
     await closeLine(ctx, userId);
     await cancelMatchesFor(ctx, userId);
     await ctx.db.patch("users", userId, {
+      leftFrom: { zoneId: user.zoneId, shareWith: shareWithOf(user) },
       visible: false,
       shareWith: "nobody",
       zoneId: undefined,
@@ -77,21 +80,3 @@ export const leave = internalMutation({
   },
 });
 
-// Demo control: a speaker I'm waiting for leaves right now, so the missed
-// request, LinkedIn and follow-up message can be shown without waiting.
-export const demoLeaveNow = mutation({
-  args: { attendeeId: v.id("users") },
-  returns: v.null(),
-  handler: async (ctx, { attendeeId }) => {
-    const mine = await ctx.db
-      .query("chatRequests")
-      .withIndex("by_attendee", (q) => q.eq("attendeeId", attendeeId))
-      .take(200);
-    const req = mine.find((r) => r.status === "waiting" || r.status === "accepted");
-    if (!req) throw new ConvexError("Send a chat request first, then try this again.");
-    const leavingAt = Date.now();
-    await ctx.db.patch("users", req.panelId, { status: "leaving", leavingAt, updatedAt: leavingAt });
-    await ctx.scheduler.runAfter(0, internal.leaving.leave, { userId: req.panelId, leavingAt });
-    return null;
-  },
-});
