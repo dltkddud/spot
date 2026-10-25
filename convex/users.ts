@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { OUTFIT_WORD_LIMIT } from "../src/lib/mockData";
+import { LEAVING_MIN_MAX } from "../src/lib/time";
 import { closeLine, scheduleLeaving } from "./leaving";
 import type { Doc, Id } from "./_generated/dataModel";
 
@@ -99,23 +100,29 @@ export const confirmStillHere = mutation({
 });
 
 // "available" / "talking" clear any leaving time, which also turns the old
-// leaving jobs into no-ops. "leaving" needs minutes from now.
+// leaving jobs into no-ops. "leaving" needs minutes from now (counted on the
+// server clock, so "10 min" is 10 minutes for everyone) or a time.
 export const setStatus = mutation({
   args: {
     id: v.id("users"),
     status: v.union(v.literal("available"), v.literal("talking"), v.literal("leaving")),
     leavingInMin: v.optional(v.number()),
+    leavingAt: v.optional(v.number()),
   },
   returns: v.null(),
-  handler: async (ctx, { id, status, leavingInMin }) => {
+  handler: async (ctx, { id, status, leavingInMin, leavingAt: at }) => {
     const user = await ctx.db.get("users", id);
     if (!user) throw new ConvexError("User not found.");
     const now = Date.now();
     if (status === "leaving") {
-      if (leavingInMin === undefined || !(leavingInMin > 0)) {
-        throw new ConvexError("Pick when you're leaving.");
+      if (leavingInMin !== undefined && !(Number.isInteger(leavingInMin) && leavingInMin >= 1 && leavingInMin <= LEAVING_MIN_MAX)) {
+        throw new ConvexError(`Pick 1 to ${LEAVING_MIN_MAX} minutes.`);
       }
-      const leavingAt = now + leavingInMin * MIN;
+      const leavingAt = leavingInMin !== undefined ? now + leavingInMin * MIN : at;
+      if (leavingAt === undefined) throw new ConvexError("Pick when you're leaving.");
+      if (leavingAt <= now) throw new ConvexError("Pick a time later than now.");
+      const event = await ctx.db.get("events", user.eventId);
+      if (event && leavingAt > event.endsAt) throw new ConvexError("Pick a time before the event ends.");
       await ctx.db.patch("users", id, { status, leavingAt, stillHereAskedAt: undefined, updatedAt: now });
       await scheduleLeaving(ctx, id, leavingAt);
     } else {

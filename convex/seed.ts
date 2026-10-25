@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, type MutationCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
-import { CAL_HACKS_KEY, EVENTS, type MockEvent } from "../src/lib/mockData";
+import type { Doc, Id } from "./_generated/dataModel";
+import { CAL_HACKS_KEY, EVENTS, MATCH_INPUTS, type MockEvent, type MockPerson } from "../src/lib/mockData";
 import { scheduleEventEnd } from "./events";
+import { newConnectCode } from "./connections";
 import { deleteParticipations, deleteProfiles } from "./cleanup";
 import { profileFromLegacy } from "./profiles";
 
@@ -80,8 +81,30 @@ async function removeDemoPeople(ctx: MutationCtx) {
   await deleteProfiles(ctx, profileIds);
 }
 
+// Starts over with real people only: every profile, participation, request,
+// huddle, AI match, connection and activity row goes, real sign-ups included.
+// Events and zones stay. The demo guests in mockData (Jimin, Logan) are put
+// back right after by ensureEvent.
+async function wipePeople(ctx: MutationCtx) {
+  const tables = [
+    "matches",
+    "matchSets",
+    "huddleMembers",
+    "huddles",
+    "chatRequests",
+    "profileConnections",
+    "connections",
+    "activity",
+    "users",
+    "profiles",
+  ] as const;
+  for (const table of tables) {
+    for (const row of await ctx.db.query(table).take(4000)) await ctx.db.delete(table, row._id);
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Events and zones from mockData.EVENTS.
+// Events, zones and demo guests from mockData.EVENTS.
 
 // Makes an event's zones match mockData, matched by code so that renaming a
 // zone never breaks where people already said they are.
@@ -107,8 +130,47 @@ async function syncZones(ctx: MutationCtx, eventId: Id<"events">, mock: MockEven
   return zoneIds;
 }
 
+// Adds demo people who aren't there yet (found by seed key), each with a
+// profile and a place at this event. Ones already there are left where they are.
+async function addDemoPeople(ctx: MutationCtx, eventId: Id<"events">, zoneIds: Record<string, Id<"zones">>, people: MockPerson[]) {
+  const now = Date.now();
+  for (const p of people) {
+    const profile = await ctx.db
+      .query("profiles")
+      .withIndex("by_seed_key", (q) => q.eq("seedKey", p.id))
+      .first();
+    if (profile) continue;
+    const profileId = await ctx.db.insert("profiles", {
+      name: p.name,
+      headline: p.headline,
+      interests: p.interests,
+      linkedinUrl: p.linkedinUrl,
+      connectCode: await newConnectCode(ctx),
+      seedKey: p.id,
+      createdAt: now,
+    });
+    const doc: Omit<Doc<"users">, "_id" | "_creationTime"> = {
+      eventId,
+      profileId,
+      role: p.role,
+      outfit: p.outfit,
+      zoneId: p.zoneId ? zoneIds[p.zoneId] : undefined,
+      status: p.status,
+      visible: p.visible,
+      shareWith: p.shareWith,
+      requestsPaused: p.requestsPaused,
+      updatedAt: p.updatedAt,
+      seedKey: p.id,
+      learnToday: MATCH_INPUTS[p.id]?.learnToday,
+      canShare: MATCH_INPUTS[p.id]?.canShare,
+    };
+    await ctx.db.insert("users", doc);
+  }
+}
+
 // Creates a mockData event with its zones or, if it already exists, keeps its
-// details, times and zones in line with mockData. No people: only real sign-ups.
+// details, times and zones in line with mockData. People are real sign-ups,
+// plus the event's demo guests.
 async function ensureEvent(ctx: MutationCtx, mock: MockEvent) {
   const details = {
     key: mock.key,
@@ -127,12 +189,13 @@ async function ensureEvent(ctx: MutationCtx, mock: MockEvent) {
     if (changed) await ctx.db.patch("events", existing._id, details);
   }
   const eventId = existing?._id ?? (await ctx.db.insert("events", details));
-  await syncZones(ctx, eventId, mock);
+  const zoneIds = await syncZones(ctx, eventId, mock);
+  if (mock.people) await addDemoPeople(ctx, eventId, zoneIds, mock.people(Date.now()));
   await scheduleEventEnd(ctx, eventId);
 }
 
 // Called when the app starts: runs pending migrations, then makes sure every
-// mockData event exists. Real sign-ups are never touched.
+// mockData event exists. Real sign-ups are never touched (except once, by wipe-people-v1).
 export const ensure = mutation({
   args: {},
   returns: v.null(),
@@ -140,6 +203,7 @@ export const ensure = mutation({
     await runOnce(ctx, "remove-still-here-and-stay", () => removeStillHereAndStay(ctx));
     await runOnce(ctx, "profiles-and-events-v1", () => profilesAndEvents(ctx));
     await runOnce(ctx, "remove-demo-people-v1", () => removeDemoPeople(ctx));
+    await runOnce(ctx, "wipe-people-v1", () => wipePeople(ctx));
     for (const mock of EVENTS) await ensureEvent(ctx, mock);
     return null;
   },

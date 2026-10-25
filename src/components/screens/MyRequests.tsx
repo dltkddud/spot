@@ -5,7 +5,7 @@ import { positionInQueue, useApp } from "@/lib/store";
 import { FollowUp } from "../FollowUp";
 import { MatchInbox } from "../Matches";
 import { HuddleCard, huddleForRequest } from "../Huddle";
-import { minutesAgo } from "@/lib/time";
+import { minutesAgo, timeLeftLabel } from "@/lib/time";
 import type { ChatRequest } from "@/lib/types";
 import { Avatar, Button, Header, SectionTitle, StatusPill, ZoneBadge } from "../ui";
 
@@ -53,6 +53,28 @@ function Row({ r, children }: { r: ChatRequest; children?: ReactNode }) {
       )}
       {children}
     </div>
+  );
+}
+
+// "You're #2 · Dana leaves in 9 min", or "You're #2 in line".
+function LinePlace({ r }: { r: ChatRequest }) {
+  const { state } = useApp();
+  const p = state.users.find((u) => u.id === r.panelId);
+  const leaving = p?.status === "leaving" && p.leavingAt && p.leavingAt > state.now ? p.leavingAt : null;
+  return (
+    <span className="text-sm text-muted">
+      You&apos;re <span className="text-xl font-black text-ink">#{positionInQueue(state.requests, r)}</span>
+      {leaving ? (
+        <>
+          {" · "}
+          <span className="font-bold text-soon-ink">
+            {p!.name.split(" ")[0]} leaves in <span className="tabular-nums">{timeLeftLabel(leaving, state.now)}</span>
+          </span>
+        </>
+      ) : (
+        " in line"
+      )}
+    </span>
   );
 }
 
@@ -112,9 +134,7 @@ export function MyRequests() {
               {waiting.map((r) => (
                 <Row key={r.id} r={r}>
                   <div className="mt-3 flex items-center justify-between gap-3">
-                    <span className="text-sm text-muted">
-                      You&apos;re <span className="text-xl font-black text-ink">#{positionInQueue(state.requests, r)}</span> in line
-                    </span>
+                    <LinePlace r={r} />
                     <button
                       onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "cancelled" })}
                       className="text-sm font-bold text-muted underline underline-offset-4"

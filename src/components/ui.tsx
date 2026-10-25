@@ -2,7 +2,7 @@
 
 import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { queueFor, useApp, type Screen } from "@/lib/store";
-import { isStale, minutesAgo, minutesUntil } from "@/lib/time";
+import { isStale, minutesAgo, timeLeft, timeLeftLabel } from "@/lib/time";
 import type { Status, User, Zone } from "@/lib/types";
 import { PIN_PATH, ZoneMark } from "./ZoneIcon";
 
@@ -133,8 +133,8 @@ export function AiTag({ claude, fallback = "Based on shared interests" }: { clau
 export function statusLabel(status: Status, leavingAt: number | undefined, now: number) {
   if (status === "available") return "Free to talk";
   if (status === "talking") return "In a conversation";
-  const m = leavingAt ? minutesUntil(leavingAt, now) : 0;
-  return m <= 1 ? "Leaving now" : `Leaving in ${m} min`;
+  if (!leavingAt || timeLeft(leavingAt, now).value === 0) return "Leaving now";
+  return `Leaving in ${timeLeftLabel(leavingAt, now)}`;
 }
 
 const statusStyles: Record<Status, string> = {

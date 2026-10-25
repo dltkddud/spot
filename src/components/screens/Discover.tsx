@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { YourPeople } from "../Connections";
 import { AiMatches, MatchInbox } from "../Matches";
-import { minutesUntil } from "@/lib/time";
+import { LEAVE_WARNING_MIN, timeLeft } from "@/lib/time";
 import { Chip, PanelCard, PillButton, SectionTitle, ZoneBadge } from "../ui";
 import { ZoneMark } from "../ZoneIcon";
 
@@ -31,7 +31,7 @@ function LeavingBoard() {
   const { state, navigate } = useApp();
   const rows = state.users
     .filter((u) => u.role === "panel" && u.visible && u.status === "leaving" && u.leavingAt)
-    .filter((u) => minutesUntil(u.leavingAt!, state.now) <= 30)
+    .filter((u) => u.leavingAt! > state.now && u.leavingAt! - state.now <= 30 * 60_000)
     .sort((a, b) => a.leavingAt! - b.leavingAt!);
   if (rows.length === 0) return null;
 
@@ -44,7 +44,8 @@ function LeavingBoard() {
       <ul>
         {rows.map((p) => {
           const zone = state.zones.find((z) => z.id === p.zoneId);
-          const mins = minutesUntil(p.leavingAt!, state.now);
+          const left = timeLeft(p.leavingAt!, state.now);
+          const soon = left.unit === "sec" || left.value <= LEAVE_WARNING_MIN;
           return (
             <li key={p.id} className="border-t border-white/10">
               <button
@@ -58,9 +59,9 @@ function LeavingBoard() {
                     {zone?.name}, look for {p.outfit}
                   </span>
                 </span>
-                <span className="text-right font-black tabular-nums text-board-text">
-                  <span className="text-2xl">{mins}</span>
-                  <span className="ml-0.5 text-xs">min</span>
+                <span className={`text-right font-black tabular-nums ${soon ? "text-soon" : "text-board-text"}`}>
+                  <span className="text-2xl">{left.value}</span>
+                  <span className="ml-0.5 text-xs">{left.unit}</span>
                 </span>
               </button>
             </li>

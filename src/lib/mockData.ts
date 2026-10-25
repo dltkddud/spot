@@ -1,10 +1,29 @@
-import type { Zone } from "./types";
+import type { Role, ShareWith, Status, Zone } from "./types";
 import { PALACE_FLOOR_PLAN, type ZoneIcon } from "./floorplan";
+
+const MIN = 60_000;
 
 export type MockZone = Zone & { icon: ZoneIcon };
 
+// A demo person: their profile and their part in one event, as one record.
+export type MockPerson = {
+  id: string; // seed key, e.g. "a-jimin"
+  name: string;
+  role: Role;
+  headline: string;
+  interests: string[];
+  outfit: string;
+  linkedinUrl: string;
+  zoneId?: string;
+  status: Status;
+  visible: boolean;
+  shareWith?: ShareWith;
+  requestsPaused: boolean;
+  updatedAt: number;
+};
+
 // An event seed.ensure creates (or keeps in line): its details and zones.
-// People only come from real sign-ups.
+// People come from real sign-ups, plus the demo guests in people (if any).
 export type MockEvent = {
   key: string;
   name: string;
@@ -14,6 +33,7 @@ export type MockEvent = {
   // Set when the venue has a floor plan in public/ (see floorplan.ts).
   floorPlan?: string;
   zones: MockZone[];
+  people?: (now: number) => MockPerson[];
 };
 
 export const INTEREST_OPTIONS = [
@@ -65,6 +85,52 @@ const ROBOTICS_ZONES: MockZone[] = [
   { id: "rx-alley", code: "D", name: "Startup Alley", landmark: "Narrow aisle along the east wall", icon: "hallway" },
 ];
 
+// The only demo people: two guests at Cal Hacks. Everyone else signs up for real.
+export function makeUsers(now: number): MockPerson[] {
+  return [
+    {
+      id: "a-jimin",
+      name: "Jimin Kim",
+      role: "attendee",
+      headline: "CS sophomore building a study-buddy agent",
+      interests: ["Agents", "Startups", "Careers"],
+      outfit: "white hoodie, black cap",
+      linkedinUrl: "https://www.linkedin.com/in/spot-demo-jimin-kim",
+      zoneId: "z-atrium",
+      status: "available",
+      visible: true,
+      requestsPaused: false,
+      updatedAt: now - 3 * MIN,
+    },
+    {
+      id: "a-logan",
+      name: "Logan Kim",
+      role: "attendee",
+      headline: "Design student prototyping apps for smart glasses",
+      interests: ["Design", "Hardware", "Frontend"],
+      outfit: "denim jacket, silver headphones",
+      linkedinUrl: "https://www.linkedin.com/in/spot-demo-logan-kim",
+      zoneId: "z-theater",
+      status: "available",
+      visible: true,
+      requestsPaused: false,
+      updatedAt: now - 5 * MIN,
+    },
+  ];
+}
+
+// What demo people want to learn and can share today, by seed key (AI matching).
+export const MATCH_INPUTS: Record<string, { learnToday?: string; canShare?: string }> = {
+  "a-jimin": {
+    learnToday: "How to get feedback on an agent project from real users",
+    canShare: "What I learned running a campus AI study group",
+  },
+  "a-logan": {
+    learnToday: "Which hardware to start with for a smart glasses prototype",
+    canShare: "Quick Figma prototyping tips for wearable screens",
+  },
+};
+
 export const EVENTS: MockEvent[] = [
   {
     key: CAL_HACKS_KEY,
@@ -74,6 +140,7 @@ export const EVENTS: MockEvent[] = [
     endsAt: EVENT_ENDS_AT,
     floorPlan: PALACE_FLOOR_PLAN,
     zones: ZONES,
+    people: makeUsers,
   },
   {
     key: "founders-coffee-sf",

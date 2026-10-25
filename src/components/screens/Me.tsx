@@ -124,6 +124,12 @@ export function Me() {
           ))}
         </div>
 
+        <Button variant="ghost" block className="mt-8" onClick={() => dispatch({ type: "logOut" })}>
+          Log out
+        </Button>
+        <p className="mt-1 text-center text-xs text-muted">
+          Log back in anytime with your LinkedIn.
+        </p>
       </main>
     </>
   );

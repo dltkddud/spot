@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { sharedInterests } from "@/lib/recommend";
 import { positionInQueue, queueFor, useApp } from "@/lib/store";
 import { HuddleCard, huddleForRequest } from "../Huddle";
-import { isStale, minutesAgo, minutesUntil } from "@/lib/time";
+import { isStale, minutesAgo, timeLeft } from "@/lib/time";
 import { Avatar, Button, Header, inputClass, PillButton, StatusPill, ZoneBadge } from "../ui";
 
 export function PanelDetail({ panelId }: { panelId: string }) {
@@ -66,8 +66,8 @@ export function PanelDetail({ panelId }: { panelId: string }) {
           <div className="mt-5 flex items-center justify-between rounded-2xl bg-board px-4 py-3 text-white">
             <span className="font-bold">Leaving the event</span>
             <span className="font-black tabular-nums text-board-text">
-              <span className="text-2xl">{minutesUntil(panel.leavingAt, state.now)}</span>
-              <span className="ml-1 text-sm">min</span>
+              <span className="text-2xl">{timeLeft(panel.leavingAt, state.now).value}</span>
+              <span className="ml-1 text-sm">{timeLeft(panel.leavingAt, state.now).unit}</span>
             </span>
           </div>
         )}

@@ -43,6 +43,9 @@ export function Welcome() {
         <Button block icon="arrow" onClick={() => navigate({ name: "profileSetup" })}>
           Get started
         </Button>
+        <Button variant="ghost" block className="mt-2" onClick={() => navigate({ name: "logIn" })}>
+          I already have a profile. Log in
+        </Button>
         <p className="mt-4 text-center text-xs leading-relaxed text-muted">
           Only your zone is shared, never your exact location.
           <br />

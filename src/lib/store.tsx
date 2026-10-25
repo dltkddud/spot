@@ -16,7 +16,7 @@ import {
 } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { minutesUntil } from "./time";
+import { timeLeftLabel } from "./time";
 import type {
   Activity,
   AiMatches,
@@ -46,6 +46,7 @@ const PENDING_CONNECT_KEY = "spot.pendingConnect";
 export type Screen =
   | { name: "welcome" }
   | { name: "profileSetup" }
+  | { name: "logIn" }
   | { name: "events" }
   | { name: "joinEvent"; eventId: string }
   | { name: "zonePicker"; fromOnboarding?: boolean }
@@ -94,7 +95,6 @@ type LocalState = {
 type State = LocalState & {
   // My participation at this event. currentUserId is the same (kept for screens).
   myUserId: string | null;
-  currentUserId: string | null;
   profile: Profile | null;
   events: EventInfo[];
   participations: Participation[];
@@ -120,6 +120,8 @@ type Action =
   | { type: "back" }
   | { type: "resetTo"; screen: Screen }
   | { type: "createProfile"; profile: ProfileInput }
+  | { type: "logIn"; linkedinUrl: string }
+  | { type: "logOut" }
   | { type: "enterEvent"; eventId: string }
   | { type: "joinEvent"; eventId: string; join: JoinInput }
   | {
@@ -150,8 +152,7 @@ type Action =
   | { type: "setRequestStatus"; requestId: string; status: ChatRequest["status"] }
   | { type: "log"; activityType: ActivityType; targetId?: string }
   | { type: "toast"; message: string }
-  | { type: "dismissToast"; id: string }
-
+  | { type: "dismissToast"; id: string };
 
 type LocalAction =
   | Extract<Action, { type: "navigate" | "back" | "resetTo" | "toast" | "dismissToast" }>
@@ -159,7 +160,8 @@ type LocalAction =
   | { type: "tick"; now: number }
   | { type: "boot"; profileId: string | null; eventId: string; stack: Screen[] }
   | { type: "setProfile"; profileId: string }
-  | { type: "setEvent"; eventId: string; stack: Screen[] };
+  | { type: "setEvent"; eventId: string; stack: Screen[] }
+  | { type: "logOut" };
 
 let idCounter = 0;
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(idCounter++).toString(36)}`;
@@ -264,6 +266,9 @@ function reducer(state: LocalState, action: LocalAction): LocalState {
 
     case "dismissToast":
       return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) };
+
+    case "logOut":
+      return { ...state, profileId: null, activity: [], toasts: [], stack: [{ name: "welcome" }] };
   }
 }
 
@@ -294,7 +299,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [local, localDispatch] = useReducer(reducer, 0, () => initialState(Date.now()));
 
   const ensureSeed = useMutation(api.seed.ensure);
+  const syncClock = useMutation(api.clock.now);
   const createProfile = useMutation(api.profiles.create);
+  const logIn = useMutation(api.profiles.logIn);
   const updateProfile = useMutation(api.profiles.update);
   const claimLegacy = useMutation(api.profiles.claimFromParticipation);
   const ensureCode = useMutation(api.profiles.ensureCode);
@@ -340,11 +347,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .catch(() => {})
       .finally(() => setClaiming(false));
   }, [claiming, claimLegacy]);
-  const profileId = local.profileId ?? claimedProfileId;
+  // After logging out, an old browser's claimed profile doesn't come back.
+  const profileId = local.booted ? local.profileId : (local.profileId ?? claimedProfileId);
 
   const eventsRaw = useLatest(useQuery(api.events.list));
-  const profileRaw = useLatest(useQuery(api.profiles.get, profileId ? { profileId } : "skip"));
-  const partsRaw = useLatest(useQuery(api.profiles.participations, profileId ? { profileId } : "skip"));
+  // Not kept across a profile change (log out, log in as someone else).
+  const profileRaw = useQuery(api.profiles.get, profileId ? { profileId } : "skip");
+  const partsRaw = useQuery(api.profiles.participations, profileId ? { profileId } : "skip");
 
   const events = useMemo<EventInfo[]>(
     () =>
@@ -374,10 +383,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const current = useLatest(useQuery(api.events.get, eventId ? { eventId } : "skip"));
   const rawUsers = useLatest(
-    useQuery(api.users.listByEvent, eventId ? { eventId: eventId as Id<"events">, viewerId: currentUserId ?? undefined } : "skip"),
+    useQuery(api.users.listByEvent, eventId ? { eventId: eventId as Id<"events">, viewerId: myUserId ?? undefined } : "skip"),
   );
 
-  const viewerId = local.booted ? (currentUserId as Id<"users"> | null) : null;
+  const viewerId = local.booted ? (myUserId as Id<"users"> | null) : null;
   const openLines = useLatest(
     useQuery(api.chatRequests.activeByEvent, eventId ? { eventId: eventId as Id<"events"> } : "skip"),
   );
@@ -511,16 +520,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localDispatch({ type: "boot", profileId: known, eventId, stack });
   }, [local.booted, claiming, eventsRaw, eventId, profileLoaded, profileId, profile, participations]);
 
-  const latest = useRef({ local, users: users ?? [], zones, event, requests, myUserId, currentUserId, participations, profileId });
+  const latest = useRef({ users: users ?? [], event, requests, myUserId, participations, profileId });
   useEffect(() => {
-    latest.current = { local, users: users ?? [], zones, event, requests, myUserId, currentUserId, participations, profileId };
+    latest.current = { users: users ?? [], event, requests, myUserId, participations, profileId };
   });
 
-  // Keeps "3 min ago" and countdowns fresh. Leaving itself runs on the server.
+  // state.now is server time: this phone's clock plus how far off it is from
+  // the server's, measured on start, every few minutes and when the app comes
+  // back to the front. Leaving times are set on the server clock, so every
+  // phone shows the same countdown.
+  const clockOffset = useRef(0);
+  const serverNow = useCallback(() => Date.now() + clockOffset.current, []);
   useEffect(() => {
-    const t = setInterval(() => localDispatch({ type: "tick", now: Date.now() }), 10_000);
+    const sync = () => {
+      const sent = Date.now();
+      syncClock()
+        .then((server) => {
+          clockOffset.current = server - (sent + Date.now()) / 2;
+          localDispatch({ type: "tick", now: serverNow() });
+        })
+        .catch(() => {});
+    };
+    sync();
+    const t = setInterval(sync, 5 * 60_000);
+    const onShow = () => document.visibilityState === "visible" && sync();
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onShow);
+    };
+  }, [syncClock, serverNow]);
+
+  // Keeps "3 min ago" and countdowns fresh: every second while anyone has a
+  // leaving countdown running, otherwise every 10 seconds. Leaving itself runs
+  // on the server.
+  const counting = !!users?.some((u) => u.status === "leaving" && u.leavingAt && u.leavingAt > local.now - 5_000);
+  useEffect(() => {
+    const t = setInterval(() => localDispatch({ type: "tick", now: serverNow() }), counting ? 1_000 : 10_000);
     return () => clearInterval(t);
-  }, []);
+  }, [counting, serverNow]);
+  // Also the moment anyone changes, so a new leaving time is counted from now,
+  // not from up to 10 seconds ago (which showed "11 min" for 10).
+  useEffect(() => {
+    if (rawUsers) localDispatch({ type: "tick", now: serverNow() });
+  }, [rawUsers, serverNow]);
 
   // Banners for my own requests: accepted, missed because the speaker left,
   // and the 10-minute heads-up the server marks on each open request.
@@ -530,7 +573,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (mySent.some((r) => r.attendeeId !== viewerId)) return; // still showing the previous viewer's rows
     if (seen.current?.viewerId !== viewerId) seen.current = { viewerId, status: new Map(), warned: new Set() };
     const { status, warned } = seen.current;
-    const now = Date.now();
+    const now = serverNow();
 
     for (const r of mySent) {
       const panel = users.find((u) => u.id === r.panelId);
@@ -564,11 +607,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         !warned.has(key)
       ) {
         warned.add(key);
-        const mins = Math.max(1, minutesUntil(panel.leavingAt, now));
-        localDispatch({ type: "toast", message: `${panel.name} leaves in ${mins} min. Head over now if you can.` });
+        localDispatch({
+          type: "toast",
+          message: `${panel.name} leaves in ${timeLeftLabel(panel.leavingAt, now)}. Head over now if you can.`,
+        });
       }
     }
-  }, [viewerId, users, zones, mySent]);
+  }, [viewerId, users, zones, mySent, serverNow]);
 
   // Banner once someone I asked "Still here?" answers (or updates anything).
   // Kept per viewer in this browser: user id -> their updatedAt when I asked.
@@ -680,8 +725,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const dispatch = useCallback<Dispatch<Action>>(
     (action) => {
-      const { local, users, event, requests, myUserId, currentUserId, participations, profileId } = latest.current;
-      const meId = currentUserId as Id<"users"> | null;
+      const { users, event, requests, myUserId, participations, profileId } = latest.current;
+      const meId = myUserId as Id<"users"> | null;
       const run = (p: Promise<unknown>) =>
         p.catch((e) => localDispatch({ type: "toast", message: errorMessage(e) }));
       // Only one sign-up step at a time, so a double tap doesn't make two.
@@ -702,6 +747,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
               localDispatch({ type: "setProfile", profileId: id });
             }),
           );
+          return;
+
+        case "logIn":
+          once(() =>
+            logIn({ linkedinUrl: action.linkedinUrl }).then((id) => {
+              save(PROFILE_KEY, id);
+              localDispatch({ type: "setProfile", profileId: id });
+            }),
+          );
+          return;
+
+        case "logOut":
+          save(PROFILE_KEY, null);
+          save(LEGACY_USER_KEY, null);
+          localDispatch({ type: "logOut" });
           return;
 
         case "enterEvent": {
@@ -774,7 +834,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
 
         case "setLeaving":
-          if (meId) run(setUserStatus({ id: meId, status: "leaving", leavingInMin: action.minutes }));
+          if (!meId) return;
+          run(setUserStatus({ id: meId, status: "leaving", leavingInMin: action.minutes }));
           return;
 
         case "leaveNow":
@@ -918,6 +979,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [
       createProfile,
+      logIn,
       updateProfile,
       joinEvent,
       updateUser,
@@ -958,7 +1020,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       profileId,
       eventId: event.id,
       myUserId,
-      currentUserId,
       profile,
       events,
       participations,
@@ -973,7 +1034,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       matchLoading,
       matches,
     };
-    const me = users.find((u) => u.id === currentUserId);
+    const me = users.find((u) => u.id === myUserId);
     return {
       state,
       me,
@@ -986,7 +1047,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     local,
     profileId,
     myUserId,
-    currentUserId,
     profile,
     events,
     participations,
