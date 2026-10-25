@@ -1065,7 +1065,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch,
   ]);
 
-  if (!local.booted || !event || !users) return <div className="min-h-[var(--app-h)] bg-bg" />;
+  if (!local.booted || !event || !users) {
+    return (
+      <div className="grid min-h-[var(--app-h)] place-items-center bg-bg">
+        <p className="animate-pulse text-sm font-semibold text-muted">Loading Spot…</p>
+      </div>
+    );
+  }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { sharedInterests } from "@/lib/recommend";
 import { positionInQueue, queueFor, useApp } from "@/lib/store";
+import { FollowUp } from "../FollowUp";
 import { HuddleCard, huddleForRequest } from "../Huddle";
 import { isStale, minutesAgo, timeLeft } from "@/lib/time";
 import { Avatar, Button, Header, inputClass, PillButton, StatusPill, ZoneBadge } from "../ui";
@@ -33,12 +34,19 @@ export function PanelDetail({ panelId }: { panelId: string }) {
   const first = panel.name.split(" ")[0];
 
   if (!panel.visible) {
+    // If I never got my chat, their LinkedIn and a message are right here too.
+    const missed = state.requests
+      .filter((r) => r.panelId === panel.id && r.attendeeId === me.id && r.closedBecause)
+      .sort((x, y) => y.createdAt - x.createdAt)[0];
     return (
       <>
         <Header title={panel.name} onBack={back} />
-        <main className="px-5 pt-10 text-center">
-          <p className="text-lg font-extrabold">{first} has left the event floor.</p>
-          <p className="mt-2 text-muted">Their zone and status are no longer shared.</p>
+        <main className="px-5 pb-28 pt-10">
+          <div className="text-center">
+            <p className="text-lg font-extrabold">{first} isn&apos;t sharing a zone right now.</p>
+            <p className="mt-2 text-muted">They may have left the event floor.</p>
+          </div>
+          {missed && <FollowUp request={missed} speaker={panel} />}
         </main>
       </>
     );
@@ -94,31 +102,7 @@ export function PanelDetail({ panelId }: { panelId: string }) {
           )}
         </section>
 
-        {panel.talkTitle && (
-          <section className="mt-5">
-            <p className="text-xs font-semibold text-muted">Talk or product</p>
-            <p className="mt-1 text-lg font-bold leading-snug">{panel.talkTitle}</p>
-          </section>
-        )}
-
-        <section className="mt-5">
-          <p className="text-xs font-semibold text-muted">Interests</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {panel.interests.map((i) => (
-              <span
-                key={i}
-                className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
-                  shared.includes(i) ? "bg-primary text-on-primary" : "border border-line bg-surface"
-                }`}
-              >
-                {i}
-              </span>
-            ))}
-          </div>
-          {shared.length > 0 && <p className="mt-2 text-xs text-muted">Dark ones are interests you share.</p>}
-        </section>
-
-        <section className="mt-7 rounded-2xl border-2 border-primary bg-surface p-4">
+        <section className="mt-5 rounded-2xl border-2 border-primary bg-surface p-4">
           {panel.id === me.id ? (
             <p className="text-sm text-muted">This is you. People see this page when they look you up.</p>
           ) : mine?.status === "accepted" ? (
@@ -194,6 +178,30 @@ export function PanelDetail({ panelId }: { panelId: string }) {
               </Button>
             </>
           )}
+        </section>
+
+        {panel.talkTitle && (
+          <section className="mt-5">
+            <p className="text-xs font-semibold text-muted">Talk or product</p>
+            <p className="mt-1 text-lg font-bold leading-snug">{panel.talkTitle}</p>
+          </section>
+        )}
+
+        <section className="mt-5">
+          <p className="text-xs font-semibold text-muted">Interests</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {panel.interests.map((i) => (
+              <span
+                key={i}
+                className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
+                  shared.includes(i) ? "bg-primary text-on-primary" : "border border-line bg-surface"
+                }`}
+              >
+                {i}
+              </span>
+            ))}
+          </div>
+          {shared.length > 0 && <p className="mt-2 text-xs text-muted">Dark ones are interests you share.</p>}
         </section>
       </main>
     </>

@@ -229,7 +229,7 @@ export function MatchInputFields({ value, onChange }: { value: MatchDraft; onCha
     <div className="space-y-6">
       <p className="flex items-start gap-2 rounded-xl bg-primary-soft p-3 text-sm font-semibold text-primary-ink">
         <Icon name="sparkle" size={18} />
-        It&apos;s optional, but it might find you the best person to talk with!
+        Optional. Spot uses this to match you and form huddles.
       </p>
       <Field label="What I want to learn today" hint={`${value.learnToday.length}/${MATCH_MAX}`}>
         <textarea

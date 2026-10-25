@@ -96,16 +96,14 @@ export function ExplorePeople() {
 
   const open = (panelId: string) => navigate({ name: "panelDetail", panelId });
 
+  // Core first (where I am, who's leaving, every speaker), then connections
+  // and AI matches.
   return (
     <div>
-      {me.role === "attendee" && <MatchInbox />}
-      <YourPeople />
       <MyBar />
       <LeavingBoard />
 
-      <AiMatches />
-
-      <SectionTitle aside={`${panels.length} sharing today`}>Everyone</SectionTitle>
+      <SectionTitle aside={`${panels.length} sharing today`}>Speakers</SectionTitle>
       <div className="-mx-5 mb-3 flex gap-2 overflow-x-auto px-5 pb-1">
         {filters.map((f) => (
           <Chip key={f} selected={filter === f} onClick={() => setFilter(f)}>
@@ -125,6 +123,16 @@ export function ExplorePeople() {
           </p>
         )}
       </div>
+
+      <div className="mt-7">
+        <YourPeople />
+      </div>
+      {me.role === "attendee" && (
+        <div className="mt-4">
+          <MatchInbox />
+        </div>
+      )}
+      <AiMatches />
     </div>
   );
 }
