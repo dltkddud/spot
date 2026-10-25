@@ -370,12 +370,13 @@ export function TabBar() {
   // Guests: Explore / Requests / Me. Speakers add Now, their own line, in front.
   const shared: Tab[] = [
     { label: "Explore", screen: { name: "explore" }, match: ["explore", "zoneDetail", "panelDetail", "matchInput"], icon: icons.explore },
-    { label: "Requests", screen: { name: "requests" }, match: ["requests"], icon: icons.requests, badge: myActive },
+    // Requests to me (to accept) and my own open requests both live here.
+    { label: "Requests", screen: { name: "requests" }, match: ["requests"], icon: icons.requests, badge: incoming + myActive },
     { label: "Me", screen: { name: "me" }, match: ["me", "zonePicker", "editProfile"], icon: icons.me },
   ];
   const tabs: Tab[] =
     me.role === "panel"
-      ? [{ label: "Now", screen: { name: "panelNow" }, match: ["panelNow"], icon: icons.now, badge: incoming }, ...shared]
+      ? [{ label: "Now", screen: { name: "panelNow" }, match: ["panelNow"], icon: icons.now }, ...shared]
       : shared;
 
   return (

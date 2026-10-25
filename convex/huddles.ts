@@ -117,7 +117,10 @@ async function poolOf(ctx: QueryCtx, panelId: Id<"users">, busy: Set<Id<"chatReq
 
 // Something changed in a speaker's line: Claude looks at it (huddlesNode.match),
 // and its groups come back through applyMatch.
+// Huddles are for speakers only: a guest asked by other guests talks 1:1.
 export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
+  const panel = await ctx.db.get("users", panelId);
+  if (panel?.role !== "panel") return;
   await ctx.scheduler.runAfter(0, internal.huddlesNode.match, { panelId });
 }
 

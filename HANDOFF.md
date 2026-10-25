@@ -4,7 +4,7 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-25 03:00 PT
+마지막 업데이트: 2026-10-25 03:30 PT
 
 ---
 
@@ -103,10 +103,10 @@ Anthropic 트랙은 Devpost 목록에 아직 없어서 Slack Anthropic 채널에
               └─ convex/*.ts  (Convex 서버)
 ```
 - **하단 탭**: 게스트는 Explore / Requests / Me, 패널은 Now / Explore / Requests / Me.
-  - Explore: 위쪽 People / Map 전환. People은 핵심부터: 내 위치, Leaving soon, Speakers(필터) → 보조: Your people, 10-min chats, AI matches. Map은 평면도와 구역 목록. 구역·패널 상세도 Explore 탭 안. 패널 상세는 구역·인상착의 바로 아래 요청 박스(#순서), 떠난 패널이면 내 LinkedIn+메시지 카드.
-  - Requests: Ready for you → Keep in touch(못 만난 패널의 LinkedIn·Claude 메시지·Copy) → In line("You're #2 · Dana leaves in 9 min", Huddle 카드) → 10-min chats → Earlier.
-  - Now: 패널 전용. 상태 큰 버튼, 떠나는 시간(10/30/60·직접 입력·Leaving now), 내 위치, Your line(Huddle 묶음 카드 "They all want to know"), People you missed, Match requests. 떠난 뒤에는 "You've left" + I'm back.
-  - 패널도 다른 패널에게 요청할 수 있다(자기 자신은 서버에서 막음). Huddle 매칭은 역할과 상관없이 같은 줄에 선 사람끼리.
+  - Explore: 위쪽 People / Map 전환. People은 핵심부터: 내 위치, Leaving soon, Speakers(필터) → 보조: Your people, AI matches(카드 버튼 → 상대 페이지에서 Request to chat). Map은 평면도와 구역 목록. 구역·패널 상세도 Explore 탭 안. 패널 상세(`panelDetail`, 게스트 페이지도 같은 화면)는 구역·인상착의 바로 아래 요청 박스(Speaker면 #순서, 게스트면 "Request sent"), 떠난 패널이면 내 LinkedIn+메시지 카드. Map의 구역 카드에서 게스트는 다른 게스트에게 "Request to chat".
+  - Requests: **Requests to you**(나에게 온 요청: Accept/Not now, We met/Didn't show. Speaker면 번호와 Huddle 묶음 카드, 게스트면 1:1) → Ready for you → In line("You're #2 · Dana leaves in 9 min", 게스트에게 보낸 건 "Waiting for … to accept") → Keep in touch → Earlier. 탭 배지 = 나에게 온 대기 요청 + 내가 보낸 열린 요청. 새 요청이 오면 "… wants to chat. See Requests." 배너.
+  - Now: 패널 전용. 상태 큰 버튼, 떠나는 시간(10/30/60·직접 입력·Leaving now), 내 위치, Your line(Taking requests 스위치 + "N people are waiting" 요약, 누르면 Requests), People you missed. 떠난 뒤에는 "You've left" + I'm back.
+  - 패널도 다른 패널에게 요청할 수 있다(자기 자신은 서버에서 막음). 게스트끼리도 1:1 요청 가능(패널 → 게스트는 서버에서 막음). Huddle은 **Speaker 줄에서만**(`proposeFor`가 받는 사람이 패널이 아니면 건너뜀): 같은 설명을 여러 번 하지 않게 하려는 기능.
 - **화면은 Convex를 직접 부르지 않는다.** 모든 읽기·쓰기는 `store.tsx`를 거친다. 새 기능도 store에 동작을 추가하고 화면은 `useApp()`으로 쓴다.
 - 앱은 클라이언트에서만 렌더링한다 (`src/app/ClientApp.tsx`의 `dynamic(..., { ssr: false })`).
 - **노트북에서는 휴대폰 프레임 안에서 동작**한다 (`PhoneFrame.tsx`). 가로 640px 이상이고 홈 화면 앱이 아니면 390×844 프레임을 띄우고, 화면이 낮으면 비율을 유지한 채 줄인다. 폰이나 홈 화면 앱은 프레임 없이 전체 화면.
@@ -135,7 +135,7 @@ convex/
   huddles.ts        proposeFor(Claude 매칭 예약), proposeByInterests(대체: 관심사 겹침), lineFor·applyMatch(Claude 입력·결과 반영),
                     afterRequestChange, dissolveAllFor, respond, setGroupStatus, forAttendee, forPanel
   huddlesNode.ts    "use node" action match: claude-haiku-5-5가 줄을 2~3명씩 묶음(prompts/huddle.md). 8초·실패면 대체
-  matches.ts        AI 매칭(learnToday/canShare, 10분 대화 제안·수락·타이머), matchesNode.ts: Claude 매칭 action (prompts/match.md)
+  matches.ts        AI 매칭(learnToday/canShare, 추천 카드만. 10분 대화는 삭제, 예약돼 있던 finish·expire만 남김), matchesNode.ts: Claude 매칭 action (prompts/match.md)
   aiCheck.ts        "use node" internal ping: Claude가 이 배포에서 도는지 { ok, model, error }만 (키는 안 돌려줌)
   clock.ts          now: 서버 시각 (폰 시계 차이 보정용)
   connections.ts    프로필끼리 connect·disconnect, connectByCode, remove, mine
@@ -151,7 +151,7 @@ convex/
   _generated/       자동 생성. 직접 고치지 않음. GitHub에 같이 올림
 prompts/
   huddle.md         Claude Huddle 묶기 프롬프트·입출력 JSON·대체 규칙
-  match.md          AI 매칭(10분 대화) 프롬프트
+  match.md          AI 매칭 프롬프트
 src/
   app/              layout, page, ClientApp, globals.css(색 토큰), icon.svg(핀 파비콘)
   components/
@@ -162,7 +162,7 @@ src/
     ZoneIcon.tsx    구역 아이콘 7개(24 격자, 선 두께 2)와 ZoneMark(핀 안 아이콘 + 코드 배지). 구역이 나오는 모든 곳에서 사용
     PhoneFrame.tsx  노트북용 휴대폰 프레임(상태바, 축소 맞춤), scrollAppToTop
     FollowUp.tsx    못 만난 패널의 LinkedIn 버튼, 메시지 초안(고쳐 쓰기 가능, Claude/Template 표시), Copy(실패 시 텍스트 선택), 기타 링크
-    Matches.tsx     AI matches 카드, 10-min chats(제안·수락·카운트다운)
+    Matches.tsx     AI matches 카드(Request to chat / Not now)
     Connections.tsx Your people 줄, 위치 공개 범위 선택, Connect with friends(코드·링크 복사·코드 입력·연결 목록)
     screens/        Welcome, Onboarding(ProfileSetup·JoinEvent와 공통 입력칸), Events, EditProfile,
                     ZonePicker, Explore(People/Map 전환),
@@ -288,6 +288,7 @@ src/
 - [ ] 3분 영어 피치와 예상 질문 리허설
 
 ---
+- [x] 요청 받기를 Requests 탭으로(Now는 요약만), 게스트끼리 1:1 요청, 10분 대화 삭제
 
 ## 6. 다른 컴퓨터에서 처음 시작하기
 
@@ -498,3 +499,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/25 02:40 팀원의 실데모 준비(LinkedIn 로그인, wipe-people-v1, Jimin·Logan)와 다시 합침. 떠나는 시간은 10/30/60 + 분 입력·서버 시각 기준으로(원인: ceil + 10초마다 갱신된 now + 시계 차이)
 - 10/25 02:45 Huddle을 Claude가 묶음(huddlesNode.match, reason·whyYou·sharedQuestion, prompts/huddle.md, 8초·실패 시 관심사 겹침)
 - 10/25 02:50 Explore 핵심 먼저(Speakers → Your people → AI matches), 패널 상세 요청 박스 위로·떠난 패널 페이지에 후속 메시지, 입력 안내 "Spot uses this to match you and form huddles.", 로딩 문구
+- 10/25 03:30 나에게 온 요청은 Requests 탭 "Requests to you"로(Now는 상태·떠나는 시간·요약), 게스트끼리 1:1 요청(Huddle은 Speaker만), 10분 대화(제안·타이머) 삭제·AI 매치 카드는 Request to chat으로

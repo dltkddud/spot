@@ -91,26 +91,6 @@ export type AiMatches = {
   items: MatchSuggestion[];
 };
 
-// A suggested 10-minute chat. The AI text is written from the sender's side
-// ("you" in basedOn is fromId).
-export type Match = {
-  id: string;
-  fromId: string;
-  toId: string;
-  status: "proposed" | "accepted" | "declined" | "expired" | "started" | "done" | "cancelled";
-  pairSummary: string;
-  reasonForFrom: string;
-  reasonForTo: string;
-  questionForFrom: string;
-  questionForTo: string;
-  basedOn: string[];
-  source: "claude" | "interests" | "demo";
-  createdAt: number;
-  meetZoneId?: string;
-  startedAt?: number;
-  endsAt?: number;
-};
-
 export type ShareWith = "everyone" | "connections" | "nobody";
 
 // A profile I'm connected with. userId is set when they're at the current event.

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useApp } from "@/lib/store";
-import type { Match, MatchSuggestion, User } from "@/lib/types";
+import type { MatchSuggestion, User } from "@/lib/types";
 import { AiTag, Avatar, Button, Icon, PillButton, RoleBadge, StatusPill, ZoneBadge } from "./ui";
 
 const first = (u?: User) => u?.name.split(" ")[0] ?? "them";
@@ -83,12 +83,14 @@ function StartWith({ question }: { question: string }) {
 }
 
 function SuggestionCard({ s, source }: { s: MatchSuggestion; source: "claude" | "interests" }) {
-  const { state, dispatch } = useApp();
+  const { state, me, dispatch, navigate } = useApp();
   const other = state.users.find((u) => u.id === s.userId);
-  if (!other) return null;
-  const open = state.matches.find(
-    (m) => (m.fromId === other.id || m.toId === other.id) && ["proposed", "accepted", "started"].includes(m.status),
+  if (!other || !me) return null;
+  const open = state.requests.find(
+    (r) => r.panelId === other.id && r.attendeeId === me.id && (r.status === "waiting" || r.status === "accepted"),
   );
+  // Speakers take requests from anyone; guests from other guests.
+  const canAsk = other.role === "panel" || me.role === "attendee";
   return (
     <article className="space-y-3 rounded-2xl border-2 border-primary bg-surface p-4">
       <PersonLine person={other} />
@@ -98,18 +100,16 @@ function SuggestionCard({ s, source }: { s: MatchSuggestion; source: "claude" | 
       <BasedOn basedOn={s.basedOn} other={other} source={source} />
       {open ? (
         <p className="text-sm font-semibold text-primary-ink">
-          {open.status === "proposed" && open.fromId !== other.id
-            ? `Waiting for ${first(other)} to say yes.`
-            : `You have a 10-min chat with ${first(other)}. See it above.`}
+          {open.status === "accepted" ? `${first(other)} is ready for you. See Requests.` : `You asked ${first(other)} to chat.`}
         </p>
       ) : (
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <Button
-            icon="clock"
+            icon={canAsk ? "chat" : "arrow"}
             className="whitespace-nowrap px-4 text-sm"
-            onClick={() => dispatch({ type: "proposeMatch", userId: other.id })}
+            onClick={() => navigate({ name: "panelDetail", panelId: other.id })}
           >
-            Suggest a 10-min chat
+            {canAsk ? "Request to chat" : "View profile"}
           </Button>
           <Button
             variant="secondary"
@@ -184,132 +184,6 @@ export function AiMatches() {
           ))}
         </div>
       )}
-    </section>
-  );
-}
-
-function Countdown({ endsAt }: { endsAt: number }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const left = Math.max(0, Math.round((endsAt - now) / 1000));
-  return (
-    <span className="font-black tabular-nums">
-      {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
-    </span>
-  );
-}
-
-// One 10-minute chat from my side: someone's suggestion to me, our agreed
-// chat, the running timer, or "Time's up".
-function MatchCard({ m }: { m: Match }) {
-  const { state, me, dispatch } = useApp();
-  if (!me) return null;
-  const mineToSend = m.fromId === me.id;
-  const other = state.users.find((u) => u.id === (mineToSend ? m.toId : m.fromId));
-  if (!other) return null;
-  const myQuestion = mineToSend ? m.questionForFrom : m.questionForTo;
-  const reason = mineToSend ? m.reasonForFrom : m.reasonForTo;
-  const zone = state.zones.find((z) => z.id === m.meetZoneId);
-
-  if (m.status === "proposed") {
-    if (mineToSend) return null; // shown on the AI match itself
-    return (
-      <article className="space-y-3 rounded-2xl border-2 border-primary bg-primary-soft p-4">
-        <p className="flex items-center gap-1.5 text-xs font-bold text-primary-ink">
-          <Icon name="sparkle" size={14} />
-          Spot thinks you two should talk
-        </p>
-        <div className="rounded-xl bg-surface p-3">
-          <PersonLine person={other} />
-        </div>
-        <p className="font-semibold leading-snug">{m.pairSummary}</p>
-        <p className="text-sm text-muted">{reason}</p>
-        <StartWith question={myQuestion} />
-        <BasedOn basedOn={m.basedOn} other={other} flip source={m.source} />
-        <div className="grid grid-cols-[1fr_auto] gap-2">
-          <Button icon="check" onClick={() => dispatch({ type: "respondMatch", matchId: m.id, accept: true })}>
-            Yes, 10 min
-          </Button>
-          <Button variant="secondary" onClick={() => dispatch({ type: "respondMatch", matchId: m.id, accept: false })}>
-            Not now
-          </Button>
-        </div>
-      </article>
-    );
-  }
-
-  if (m.status === "done") {
-    return (
-      <article className="space-y-3 rounded-2xl border-2 border-soon bg-soon-soft p-4">
-        <p className="font-extrabold text-soon-ink">Time&apos;s up. Keep talking or wrap up?</p>
-        <p className="text-sm">Your 10 minutes with {other.name} are over.</p>
-        <div className="grid grid-cols-2 gap-2">
-          <Button icon="check" onClick={() => dispatch({ type: "wrapUpMatch", matchId: m.id, free: true })}>
-            I&apos;m free again
-          </Button>
-          <Button variant="secondary" onClick={() => dispatch({ type: "wrapUpMatch", matchId: m.id, free: false })}>
-            Keep talking
-          </Button>
-        </div>
-      </article>
-    );
-  }
-
-  // Accepted or started.
-  return (
-    <article className="space-y-3 rounded-2xl border-2 border-go bg-surface p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-bold text-go-ink">
-          {m.status === "started" ? "10-min chat in progress" : "You're both in for 10 minutes"}
-        </p>
-        {m.status === "started" && m.endsAt && (
-          <span className="rounded-full bg-go px-3 py-1 text-lg text-white">
-            <Countdown endsAt={m.endsAt} />
-          </span>
-        )}
-      </div>
-      <PersonLine person={other} />
-      <div className="grid gap-2 rounded-xl bg-surface-2 p-3 text-sm">
-        {zone && (
-          <p>
-            <span className="font-bold">Meet at {zone.name}</span>
-            <span className="block text-xs text-muted">{zone.landmark}</span>
-          </p>
-        )}
-        <p>
-          Look for <span className="font-semibold">{other.outfit}</span>
-        </p>
-        <p className="text-xs text-muted">
-          {first(other)} will look for <span className="font-semibold text-ink">{me.outfit}</span>
-        </p>
-      </div>
-      <StartWith question={myQuestion} />
-      {m.status === "accepted" && (
-        <Button block icon="clock" onClick={() => dispatch({ type: "startMatch", matchId: m.id })}>
-          Start 10-min chat
-        </Button>
-      )}
-    </article>
-  );
-}
-
-// Chats suggested to me, agreed, running or just finished. Empty when there are none.
-export function MatchInbox({ title }: { title?: string }) {
-  const { state, me } = useApp();
-  if (!me) return null;
-  const shown = state.matches.filter((m) => !(m.status === "proposed" && m.fromId === me.id));
-  if (shown.length === 0) return null;
-  return (
-    <section className={title ? "" : "mb-4"}>
-      {title && <h2 className="mb-3 mt-7 text-base font-extrabold">{title}</h2>}
-      <div className="space-y-3">
-        {shown.map((m) => (
-          <MatchCard key={m.id} m={m} />
-        ))}
-      </div>
     </section>
   );
 }

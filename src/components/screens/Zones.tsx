@@ -135,15 +135,16 @@ function PersonCard({ person }: { person: User }) {
         Updated {minutesAgo(person.updatedAt, state.now)}
       </p>
 
-      {person.role === "panel" && (
+      {/* Speakers take requests from anyone; guests from other guests. */}
+      {(person.role === "panel" || me.role === "attendee") && (
         <Button
           block
           variant="secondary"
-          icon="arrow"
+          icon={person.role === "panel" ? "arrow" : "chat"}
           className="mt-3"
           onClick={() => navigate({ name: "panelDetail", panelId: person.id })}
         >
-          See profile
+          {person.role === "panel" ? "See profile" : "Request to chat"}
         </Button>
       )}
     </article>

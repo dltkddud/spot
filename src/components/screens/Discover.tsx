@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { YourPeople } from "../Connections";
-import { AiMatches, MatchInbox } from "../Matches";
+import { AiMatches } from "../Matches";
 import { LEAVE_WARNING_MIN, timeLeft } from "@/lib/time";
 import { Chip, PanelCard, PillButton, SectionTitle, ZoneBadge } from "../ui";
 import { ZoneMark } from "../ZoneIcon";
@@ -127,11 +127,6 @@ export function ExplorePeople() {
       <div className="mt-7">
         <YourPeople />
       </div>
-      {me.role === "attendee" && (
-        <div className="mt-4">
-          <MatchInbox />
-        </div>
-      )}
       <AiMatches />
     </div>
   );

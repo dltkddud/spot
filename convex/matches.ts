@@ -1,19 +1,14 @@
-import { ConvexError, v } from "convex/values";
-import { internal } from "./_generated/api";
+import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import schema, { matchSuggestion } from "./schema";
+import { matchSuggestion } from "./schema";
 import { record } from "./activity";
 import { shareWithOf } from "./users";
 
 // AI matching: people write what they want to learn today and what they can
-// share; matchesNode.suggest asks Claude who fits; either side can then
-// suggest a 10-minute chat, and when both say yes, Spot sets it up and times it.
+// share; matchesNode.suggest asks Claude who fits. From a match, people open
+// the other person's page and send a normal chat request.
 
-const MIN = 60_000;
-const ANSWER_WITHIN_MIN = 15;
-const CHAT_MIN = 10;
-const MAX_OPEN_OFFERS = 3;
 const MAX_CANDIDATES = 15;
 const OPEN = ["proposed", "accepted", "started"] as const;
 
@@ -197,33 +192,23 @@ export const saveSet = internalMutation({
   },
 });
 
-// My AI matches, and my open chats (plus finished ones I haven't closed yet).
+// My AI matches.
 export const forMe = query({
   args: { userId: v.id("users") },
-  returns: v.object({
-    set: v.union(
-      v.null(),
-      v.object({
-        source: v.union(v.literal("claude"), v.literal("interests")),
-        items: v.array(matchSuggestion),
-        createdAt: v.number(),
-      }),
-    ),
-    matches: v.array(schema.doc("matches")),
-  }),
+  returns: v.union(
+    v.null(),
+    v.object({
+      source: v.union(v.literal("claude"), v.literal("interests")),
+      items: v.array(matchSuggestion),
+      createdAt: v.number(),
+    }),
+  ),
   handler: async (ctx, { userId }) => {
     const saved = await ctx.db
       .query("matchSets")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
-    const matches = [
-      ...(await openMatchesOf(ctx, userId)),
-      ...(await openMatchesOf(ctx, userId, ["done"])).filter((m) => !m.wrappedUp.includes(userId)),
-    ];
-    return {
-      set: saved ? { source: saved.source, items: saved.items, createdAt: saved.createdAt } : null,
-      matches: matches.sort((a, b) => b.createdAt - a.createdAt),
-    };
+    return saved ? { source: saved.source, items: saved.items, createdAt: saved.createdAt } : null;
   },
 });
 
@@ -237,57 +222,6 @@ export const setInputs = mutation({
       canShare: canShare.trim().slice(0, 140) || undefined,
     });
     return null;
-  },
-});
-
-async function insertMatch(
-  ctx: MutationCtx,
-  eventId: Id<"events">,
-  fromId: Id<"users">,
-  toId: Id<"users">,
-  s: Suggestion,
-  source: Doc<"matches">["source"],
-) {
-  const matchId = await ctx.db.insert("matches", {
-    eventId,
-    fromId,
-    toId,
-    status: "proposed",
-    direction: s.direction,
-    pairSummary: s.pairSummary,
-    reasonForFrom: s.reasonForMe,
-    reasonForTo: s.reasonForThem,
-    questionForFrom: s.questionForMe,
-    questionForTo: s.questionForThem,
-    basedOn: s.basedOn,
-    source,
-    createdAt: Date.now(),
-    wrappedUp: [],
-  });
-  await ctx.scheduler.runAfter(ANSWER_WITHIN_MIN * MIN, internal.matches.expire, { matchId });
-  await record(ctx, eventId, "match_suggested", fromId, toId);
-  return matchId;
-}
-
-// "Suggest a 10-min chat" on one of my AI matches.
-export const propose = mutation({
-  args: { fromId: v.id("users"), toId: v.id("users") },
-  returns: v.id("matches"),
-  handler: async (ctx, { fromId, toId }) => {
-    const [from, to] = await Promise.all([ctx.db.get("users", fromId), ctx.db.get("users", toId)]);
-    if (!from || !to || from.eventId !== to.eventId) throw new ConvexError("They're not at this event anymore.");
-    const set = await ctx.db
-      .query("matchSets")
-      .withIndex("by_user", (q) => q.eq("userId", fromId))
-      .first();
-    const s = set?.items.find((i) => i.otherId === toId);
-    if (!set || !s) throw new ConvexError("Find matches first, then try this again.");
-    const mine = await openMatchesOf(ctx, fromId);
-    if (mine.some((m) => otherOf(m, fromId) === toId)) throw new ConvexError("You already have a chat going with them.");
-    if (mine.filter((m) => m.fromId === fromId && m.status === "proposed").length >= MAX_OPEN_OFFERS) {
-      throw new ConvexError(`You can have ${MAX_OPEN_OFFERS} suggestions out at once. Wait for an answer first.`);
-    }
-    return await insertMatch(ctx, from.eventId, fromId, toId, s, set.source);
   },
 });
 
@@ -305,54 +239,8 @@ export const dismiss = mutation({
   },
 });
 
-async function accept(ctx: MutationCtx, m: Doc<"matches">) {
-  const [from, to] = await Promise.all([ctx.db.get("users", m.fromId), ctx.db.get("users", m.toId)]);
-  await ctx.db.patch("matches", m._id, {
-    status: "accepted",
-    respondedAt: Date.now(),
-    meetZoneId: to?.zoneId ?? from?.zoneId,
-  });
-  await record(ctx, m.eventId, "match_accepted", m.toId, m.fromId);
-}
-
-// "Yes, 10 min" / "Not now" from the person a chat was suggested to.
-export const respond = mutation({
-  args: { matchId: v.id("matches"), userId: v.id("users"), accept: v.boolean() },
-  returns: v.null(),
-  handler: async (ctx, { matchId, userId, accept: yes }) => {
-    const m = await ctx.db.get("matches", matchId);
-    if (!m || m.toId !== userId) throw new ConvexError("That suggestion isn't for you.");
-    if (m.status !== "proposed") throw new ConvexError("That suggestion has already changed.");
-    if (yes) await accept(ctx, m);
-    else await ctx.db.patch("matches", matchId, { status: "declined", respondedAt: Date.now() });
-    return null;
-  },
-});
-
-async function setTalking(ctx: MutationCtx, userId: Id<"users">, status: "talking" | "available") {
-  const u = await ctx.db.get("users", userId);
-  // Someone on their way out keeps their leaving time.
-  if (u && u.status !== "leaving") await ctx.db.patch("users", userId, { status, updatedAt: Date.now() });
-}
-
-// "Start 10-min chat": both people show as in a conversation and the timer runs.
-export const start = mutation({
-  args: { matchId: v.id("matches"), userId: v.id("users") },
-  returns: v.null(),
-  handler: async (ctx, { matchId, userId }) => {
-    const m = await ctx.db.get("matches", matchId);
-    if (!m || (m.fromId !== userId && m.toId !== userId)) throw new ConvexError("That chat isn't yours.");
-    if (m.status !== "accepted") throw new ConvexError("That chat has already changed.");
-    const startedAt = Date.now();
-    const endsAt = startedAt + CHAT_MIN * MIN;
-    await ctx.db.patch("matches", matchId, { status: "started", startedAt, endsAt });
-    await setTalking(ctx, m.fromId, "talking");
-    await setTalking(ctx, m.toId, "talking");
-    await ctx.scheduler.runAt(endsAt, internal.matches.finish, { matchId, endsAt });
-    return null;
-  },
-});
-
+// 10-min chats suggested or started before they were removed: jobs already
+// scheduled still close them.
 export const finish = internalMutation({
   args: { matchId: v.id("matches"), endsAt: v.number() },
   returns: v.null(),
@@ -365,20 +253,6 @@ export const finish = internalMutation({
   },
 });
 
-// After "Time's up": "I'm free again" (back to available) or "Keep talking".
-export const wrapUp = mutation({
-  args: { matchId: v.id("matches"), userId: v.id("users"), free: v.boolean() },
-  returns: v.null(),
-  handler: async (ctx, { matchId, userId, free }) => {
-    const m = await ctx.db.get("matches", matchId);
-    if (!m || (m.fromId !== userId && m.toId !== userId)) throw new ConvexError("That chat isn't yours.");
-    if (!m.wrappedUp.includes(userId)) await ctx.db.patch("matches", matchId, { wrappedUp: [...m.wrappedUp, userId] });
-    if (free) await setTalking(ctx, userId, "available");
-    return null;
-  },
-});
-
-// No answer within 15 minutes.
 export const expire = internalMutation({
   args: { matchId: v.id("matches") },
   returns: v.null(),
@@ -399,13 +273,3 @@ export async function cancelMatchesFor(
     await ctx.db.patch("matches", m._id, { status: "cancelled" });
   }
 }
-
-export const leaveEvent = mutation({
-  args: { userId: v.id("users") },
-  returns: v.null(),
-  handler: async (ctx, { userId }) => {
-    await cancelMatchesFor(ctx, userId, ["proposed", "accepted"]);
-    return null;
-  },
-});
-

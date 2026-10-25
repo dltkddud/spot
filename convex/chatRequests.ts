@@ -31,11 +31,15 @@ export const create = mutation({
   handler: async (ctx, { attendeeId, panelId, note }) => {
     const attendee = await ctx.db.get("users", attendeeId);
     const panel = await ctx.db.get("users", panelId);
-    if (!attendee || !panel || panel.role !== "panel" || panel.eventId !== attendee.eventId) {
-      throw new ConvexError("That speaker isn't at this event.");
+    // Anyone can ask a speaker; guests can also ask other guests (1:1, no huddles).
+    if (!attendee || !panel || panel.eventId !== attendee.eventId) {
+      throw new ConvexError("They aren't at this event.");
+    }
+    if (panel.role === "attendee" && attendee.role !== "attendee") {
+      throw new ConvexError("Speakers take requests. Guests can ask other guests.");
     }
     const panelProfile = panel.profileId ? await ctx.db.get("profiles", panel.profileId) : null;
-    const first = panelProfile?.name.split(" ")[0] ?? "This speaker";
+    const first = panelProfile?.name.split(" ")[0] ?? "They";
     if (attendeeId === panelId) throw new ConvexError("You can't request a chat with yourself.");
     if (!panel.visible) throw new ConvexError(`${first} has left the event floor.`);
     if (panel.requestsPaused) throw new ConvexError(`${first} paused requests.`);
@@ -45,7 +49,9 @@ export const create = mutation({
       .withIndex("by_attendee", (q) => q.eq("attendeeId", attendeeId))
       .take(500);
     if (mine.some((r) => r.panelId === panelId && isActive(r))) {
-      throw new ConvexError(`You're already in line for ${first}.`);
+      throw new ConvexError(
+        panel.role === "panel" ? `You're already in line for ${first}.` : `You already asked ${first}.`,
+      );
     }
 
     // The heads-up job may already have run if they leave within 10 minutes.
@@ -67,7 +73,7 @@ export const create = mutation({
   },
 });
 
-// Who may move a request where:
+// Who may move a request where (panel = whoever the request is to, speaker or guest):
 //   panel:    waiting -> accepted, active -> declined / missed / met
 //   attendee: active -> cancelled / met
 export const setStatus = mutation({

@@ -20,7 +20,6 @@ import { timeLeftLabel } from "./time";
 import type {
   Activity,
   AiMatches,
-  Match,
   ActivityType,
   ChatRequest,
   Connection,
@@ -108,11 +107,9 @@ type State = LocalState & {
   stats: Record<string, number>;
   // Profiles I'm connected with (they see my zone when I share with connections).
   connections: Connection[];
-  // My AI matches at this event, whether they're being found right now, and
-  // the 10-minute chats I'm in (suggested, agreed, running, or just finished).
+  // My AI matches at this event, and whether they're being found right now.
   aiMatches: AiMatches | null;
   matchLoading: boolean;
-  matches: Match[];
 };
 
 type Action =
@@ -131,11 +128,7 @@ type Action =
     }
   | { type: "saveMatchInputs"; learnToday: string; canShare: string }
   | { type: "findMatches"; refresh: boolean }
-  | { type: "proposeMatch"; userId: string }
   | { type: "dismissMatch"; userId: string }
-  | { type: "respondMatch"; matchId: string; accept: boolean }
-  | { type: "startMatch"; matchId: string }
-  | { type: "wrapUpMatch"; matchId: string; free: boolean }
   | { type: "updateMe"; patch: { zoneId?: string; outfit?: string; shareWith?: ShareWith; requestsPaused?: boolean; openToHuddles?: boolean } }
   | { type: "setStatus"; status: Exclude<Status, "leaving"> }
   | { type: "setLeaving"; minutes: number }
@@ -320,12 +313,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setRequestStatus = useMutation(api.chatRequests.setStatus);
   const suggestMatches = useAction(api.matchesNode.suggest);
   const setMatchInputs = useMutation(api.matches.setInputs);
-  const proposeMatch = useMutation(api.matches.propose);
   const dismissMatch = useMutation(api.matches.dismiss);
-  const respondMatch = useMutation(api.matches.respond);
-  const startMatch = useMutation(api.matches.start);
-  const wrapUpMatch = useMutation(api.matches.wrapUp);
-  const leaveEventMatches = useMutation(api.matches.leaveEvent);
   const [matchLoading, setMatchLoading] = useState(false);
 
   useEffect(() => {
@@ -400,33 +388,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const myMatches = useLatest(useQuery(api.matches.forMe, viewerId ? { userId: viewerId } : "skip"));
   const aiMatches = useMemo<AiMatches | null>(
     () =>
-      myMatches?.set
+      myMatches
         ? {
-            source: myMatches.set.source,
-            items: myMatches.set.items.map(({ otherId, ...s }) => ({ userId: otherId, ...s })),
+            source: myMatches.source,
+            items: myMatches.items.map(({ otherId, ...s }) => ({ userId: otherId, ...s })),
           }
         : null,
-    [myMatches],
-  );
-  const matches = useMemo<Match[]>(
-    () =>
-      (myMatches?.matches ?? []).map((m) => ({
-        id: m._id,
-        fromId: m.fromId,
-        toId: m.toId,
-        status: m.status,
-        pairSummary: m.pairSummary,
-        reasonForFrom: m.reasonForFrom,
-        reasonForTo: m.reasonForTo,
-        questionForFrom: m.questionForFrom,
-        questionForTo: m.questionForTo,
-        basedOn: m.basedOn,
-        source: m.source,
-        createdAt: m.createdAt,
-        meetZoneId: m.meetZoneId,
-        startedAt: m.startedAt,
-        endsAt: m.endsAt,
-      })),
     [myMatches],
   );
   const stats = useMemo(() => summary ?? {}, [summary]);
@@ -615,6 +582,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [viewerId, users, zones, mySent, serverNow]);
 
+  // Banner when someone new asks me for a chat (speaker or guest). They show in Requests.
+  const seenIncoming = useRef<{ viewerId: string; ids: Set<string>; loaded: boolean } | null>(null);
+  useEffect(() => {
+    if (!viewerId || !users || !myLine) return;
+    if (myLine.some((r) => r.panelId !== viewerId)) return; // still showing the previous viewer's rows
+    if (seenIncoming.current?.viewerId !== viewerId) seenIncoming.current = { viewerId, ids: new Set(), loaded: false };
+    const seen = seenIncoming.current;
+    for (const r of myLine) {
+      if (seen.ids.has(r._id)) continue;
+      seen.ids.add(r._id);
+      if (!seen.loaded || r.status !== "waiting") continue;
+      const name = users.find((u) => u.id === r.attendeeId)?.name.split(" ")[0] ?? "Someone";
+      localDispatch({ type: "toast", message: `${name} wants to chat. See Requests.` });
+    }
+    seen.loaded = true;
+  }, [viewerId, users, myLine]);
+
   // Banner once someone I asked "Still here?" answers (or updates anything).
   // Kept per viewer in this browser: user id -> their updatedAt when I asked.
   const askedStillHere = useRef<{ viewerId: string | null; at: Map<string, number> }>({ viewerId: null, at: new Map() });
@@ -690,33 +674,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     seen.loaded = true;
   }, [profileId, myLinks]);
 
-  // Banners for 10-minute chats: someone suggests one to me, someone says yes
-  // to mine, the other person starts it, time runs out.
-  const seenMatches = useRef<{ viewerId: string; status: Map<string, string>; loaded: boolean } | null>(null);
-  useEffect(() => {
-    if (!viewerId || !users || !myMatches) return;
-    if (seenMatches.current?.viewerId !== viewerId) seenMatches.current = { viewerId, status: new Map(), loaded: false };
-    const seen = seenMatches.current;
-    for (const m of matches) {
-      const before = seen.status.get(m.id);
-      seen.status.set(m.id, m.status);
-      if (!seen.loaded || before === m.status) continue;
-      const other = users.find((u) => u.id === (m.fromId === viewerId ? m.toId : m.fromId));
-      const name = other?.name.split(" ")[0] ?? "Someone";
-      const zone = zones.find((z) => z.id === m.meetZoneId);
-      const message =
-        !before && m.status === "proposed" && m.toId === viewerId
-          ? `Spot thinks you and ${name} should talk. Have 10 minutes?`
-          : m.status === "accepted" && m.fromId === viewerId
-            ? `${name} said yes. Meet at ${zone?.name ?? "their zone"}.`
-            : m.status === "done"
-              ? `Time's up with ${name}.`
-              : null;
-      if (message) localDispatch({ type: "toast", message });
-    }
-    seen.loaded = true;
-  }, [viewerId, users, zones, myMatches, matches]);
-
   // Profiles made before connect codes existed get one when they open the app.
   const needsCode = !!profile && !profile.connectCode;
   useEffect(() => {
@@ -768,10 +725,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         case "enterEvent": {
           const mine = participations.find((p) => p.eventId === action.eventId);
-          // Going to another event: chats suggested or agreed here are off.
-          if (myUserId && event && action.eventId !== event.id) {
-            leaveEventMatches({ userId: myUserId as Id<"users"> }).catch(() => {});
-          }
           save(EVENT_KEY, action.eventId);
           localDispatch({
             type: "setEvent",
@@ -955,24 +908,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           run(suggestMatches({ userId: meId, refresh: action.refresh })).finally(() => setMatchLoading(false));
           return;
 
-        case "proposeMatch":
-          if (meId) run(proposeMatch({ fromId: meId, toId: action.userId as Id<"users"> }));
-          return;
-
         case "dismissMatch":
           if (meId) run(dismissMatch({ userId: meId, otherId: action.userId as Id<"users"> }));
-          return;
-
-        case "respondMatch":
-          if (meId) run(respondMatch({ matchId: action.matchId as Id<"matches">, userId: meId, accept: action.accept }));
-          return;
-
-        case "startMatch":
-          if (meId) run(startMatch({ matchId: action.matchId as Id<"matches">, userId: meId }));
-          return;
-
-        case "wrapUpMatch":
-          if (meId) run(wrapUpMatch({ matchId: action.matchId as Id<"matches">, userId: meId, free: action.free }));
           return;
 
         default:
@@ -998,12 +935,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setRequestStatus,
       suggestMatches,
       setMatchInputs,
-      proposeMatch,
       dismissMatch,
-      respondMatch,
-      startMatch,
-      wrapUpMatch,
-      leaveEventMatches,
     ],
   );
 
@@ -1034,7 +966,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connections,
       aiMatches,
       matchLoading,
-      matches,
     };
     const me = users.find((u) => u.id === myUserId);
     return {
@@ -1061,7 +992,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     connections,
     aiMatches,
     matchLoading,
-    matches,
     dispatch,
   ]);
 

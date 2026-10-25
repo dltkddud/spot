@@ -32,6 +32,9 @@ export function PanelDetail({ panelId }: { panelId: string }) {
   const shared = sharedInterests(me, panel);
   const stale = isStale(panel.updatedAt, state.now);
   const first = panel.name.split(" ")[0];
+  // Guests ask guests 1:1: no line, no huddles. Speakers only ask speakers.
+  const isGuest = panel.role === "attendee";
+  const canAsk = !isGuest || me.role === "attendee";
 
   if (!panel.visible) {
     // If I never got my chat, their LinkedIn and a message are right here too.
@@ -102,83 +105,101 @@ export function PanelDetail({ panelId }: { panelId: string }) {
           )}
         </section>
 
-        <section className="mt-5 rounded-2xl border-2 border-primary bg-surface p-4">
-          {panel.id === me.id ? (
-            <p className="text-sm text-muted">This is you. People see this page when they look you up.</p>
-          ) : mine?.status === "accepted" ? (
-            <>
-              <p className="text-lg font-extrabold">{first} is ready for you</p>
-              <p className="mt-1 text-sm text-muted">
-                Head to {zone?.name} and look for {panel.outfit}.
-              </p>
-              <Button
-                variant="go"
-                icon="check"
-                block
-                className="mt-4"
-                onClick={() => dispatch({ type: "setRequestStatus", requestId: mine.id, status: "met" })}
-              >
-                We met
-              </Button>
-            </>
-          ) : mine?.status === "waiting" ? (
-            <>
-              <p className="text-xs font-semibold text-muted">You&apos;re in line</p>
-              <p className="mt-1 text-3xl font-black">#{positionInQueue(state.requests, mine)}</p>
-              {mine.note && <p className="mt-2 text-sm">&ldquo;{mine.note}&rdquo;</p>}
-              {huddleForRequest(state.huddles, mine) && (
-                <div className="mt-3">
-                  <HuddleCard huddle={huddleForRequest(state.huddles, mine)!} compact />
-                </div>
-              )}
-              <p className="mt-2 text-sm text-muted">
-                We&apos;ll let you know when {first} accepts, or if they&apos;re about to leave.
-              </p>
-              <Button
-                variant="secondary"
-                icon="x"
-                block
-                className="mt-4"
-                onClick={() => dispatch({ type: "setRequestStatus", requestId: mine.id, status: "cancelled" })}
-              >
-                Cancel request
-              </Button>
-            </>
-          ) : panel.requestsPaused ? (
-            <>
-              <p className="text-lg font-extrabold">Not taking new requests right now</p>
-              <p className="mt-1 text-sm text-muted">
-                {first} paused requests. You can still walk over to {zone?.name}.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-lg font-extrabold">Talk with {first}</p>
-              <p className="mt-1 text-sm text-muted">
-                {waitingCount === 0 ? "No one is waiting." : `${waitingCount} ${waitingCount === 1 ? "person is" : "people are"} waiting.`}{" "}
-                {first} sees your profile and accepts when ready.
-              </p>
-              <input
-                className={`${inputClass} mt-4`}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={100}
-                placeholder="What do you want to ask? (optional)"
-              />
-              <Button
-                block
-                icon="chat"
-                className="mt-3"
-                onClick={() => {
-                  dispatch({ type: "requestChat", panelId: panel.id, note });
-                  setNote("");
-                }}
-              >
-                Request to chat
-              </Button>
-            </>
-          )}
-        </section>
+        {(canAsk || panel.id === me.id) && (
+          <section className="mt-5 rounded-2xl border-2 border-primary bg-surface p-4">
+            {panel.id === me.id ? (
+              <p className="text-sm text-muted">This is you. People see this page when they look you up.</p>
+            ) : mine?.status === "accepted" ? (
+              <>
+                <p className="text-lg font-extrabold">{first} is ready for you</p>
+                <p className="mt-1 text-sm text-muted">
+                  Head to {zone?.name} and look for {panel.outfit}.
+                </p>
+                <Button
+                  variant="go"
+                  icon="check"
+                  block
+                  className="mt-4"
+                  onClick={() => dispatch({ type: "setRequestStatus", requestId: mine.id, status: "met" })}
+                >
+                  We met
+                </Button>
+              </>
+            ) : mine?.status === "waiting" && isGuest ? (
+              <>
+                <p className="text-lg font-extrabold">Request sent</p>
+                {mine.note && <p className="mt-2 text-sm">&ldquo;{mine.note}&rdquo;</p>}
+                <p className="mt-2 text-sm text-muted">We&apos;ll let you know when {first} accepts.</p>
+                <Button
+                  variant="secondary"
+                  icon="x"
+                  block
+                  className="mt-4"
+                  onClick={() => dispatch({ type: "setRequestStatus", requestId: mine.id, status: "cancelled" })}
+                >
+                  Cancel request
+                </Button>
+              </>
+            ) : mine?.status === "waiting" ? (
+              <>
+                <p className="text-xs font-semibold text-muted">You&apos;re in line</p>
+                <p className="mt-1 text-3xl font-black">#{positionInQueue(state.requests, mine)}</p>
+                {mine.note && <p className="mt-2 text-sm">&ldquo;{mine.note}&rdquo;</p>}
+                {huddleForRequest(state.huddles, mine) && (
+                  <div className="mt-3">
+                    <HuddleCard huddle={huddleForRequest(state.huddles, mine)!} compact />
+                  </div>
+                )}
+                <p className="mt-2 text-sm text-muted">
+                  We&apos;ll let you know when {first} accepts, or if they&apos;re about to leave.
+                </p>
+                <Button
+                  variant="secondary"
+                  icon="x"
+                  block
+                  className="mt-4"
+                  onClick={() => dispatch({ type: "setRequestStatus", requestId: mine.id, status: "cancelled" })}
+                >
+                  Cancel request
+                </Button>
+              </>
+            ) : panel.requestsPaused ? (
+              <>
+                <p className="text-lg font-extrabold">Not taking new requests right now</p>
+                <p className="mt-1 text-sm text-muted">
+                  {first} paused requests. You can still walk over to {zone?.name}.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg font-extrabold">Talk with {first}</p>
+                <p className="mt-1 text-sm text-muted">
+                  {!isGuest &&
+                    `${waitingCount === 0 ? "No one is waiting." : `${waitingCount} ${waitingCount === 1 ? "person is" : "people are"} waiting.`} `}
+                  {first} sees your profile and accepts when ready.
+                </p>
+                <input
+                  className={`${inputClass} mt-4`}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  maxLength={100}
+                  placeholder="What do you want to ask? (optional)"
+                />
+                <Button
+                  block
+                  icon="chat"
+                  className="mt-3"
+                  onClick={() => {
+                    dispatch({ type: "requestChat", panelId: panel.id, note });
+                    setNote("");
+                  }}
+                >
+                  Request to chat
+                </Button>
+              </>
+            )}
+          </section>
+        )}
 
         {panel.talkTitle && (
           <section className="mt-5">

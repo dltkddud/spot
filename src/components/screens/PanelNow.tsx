@@ -2,12 +2,8 @@
 
 import { useState } from "react";
 import { linkHref } from "@/lib/links";
-import { sharedInterests } from "@/lib/recommend";
 import { queueFor, useApp } from "@/lib/store";
-import { clockTime, LEAVING_MIN_MAX, minutesAgo, timeLeftLabel } from "@/lib/time";
-import type { ChatRequest, Huddle } from "@/lib/types";
-import { PanelHuddleCard } from "../Huddle";
-import { MatchInbox } from "../Matches";
+import { clockTime, LEAVING_MIN_MAX, timeLeftLabel } from "@/lib/time";
 import { Avatar, Button, Icon, inputClass, SectionTitle } from "../ui";
 import { MyBar } from "./Discover";
 
@@ -18,25 +14,8 @@ export function PanelNow() {
   const queue = queueFor(state.requests, me.id);
   const accepted = queue.filter((r) => r.status === "accepted");
   const waiting = queue.filter((r) => r.status === "waiting");
-  const formed = state.huddles.filter((h) => h.panelId === me.id && h.status === "formed");
   const inLine = waiting.length + accepted.length;
   const hasLeft = me.status === "leaving" && !!me.leavingAt && me.leavingAt <= state.now && !me.visible;
-
-  // Each formed huddle shows once, in place of its members' requests.
-  type Place = { r: ChatRequest; huddle?: undefined } | { huddle: Huddle; requests: ChatRequest[] };
-  const places = (list: ChatRequest[]): Place[] => {
-    const out: Place[] = [];
-    const shown = new Set<string>();
-    for (const r of list) {
-      const huddle = formed.find((h) => h.id === r.huddleId);
-      if (!huddle) out.push({ r });
-      else if (!shown.has(huddle.id)) {
-        shown.add(huddle.id);
-        out.push({ huddle, requests: list.filter((x) => x.huddleId === huddle.id) });
-      }
-    }
-    return out;
-  };
 
   if (hasLeft) {
     return (
@@ -110,104 +89,38 @@ export function PanelNow() {
         Your line
       </SectionTitle>
 
-      {queue.length > 0 && (
-        <p className="-mt-1 mb-3 text-sm text-muted">
-          {queue.length} {queue.length === 1 ? "person wants" : "people want"} to talk with you.
-        </p>
-      )}
-
       {me.requestsPaused && (
         <p className="mb-3 rounded-xl bg-soon-soft p-3 text-sm font-semibold text-soon-ink">
           New requests are paused. People already in line stay in line.
         </p>
       )}
 
-      <div className="space-y-3">
-        {places(accepted).map((p) => {
-          if (p.huddle) return <PanelHuddleCard key={p.huddle.id} huddle={p.huddle} requests={p.requests} />;
-          const r = p.r;
-          const a = state.users.find((u) => u.id === r.attendeeId);
-          if (!a) return null;
-          return (
-            <div key={r.id} className="rounded-2xl border-2 border-go bg-surface p-4">
-              <p className="text-xs font-bold text-go-ink">Coming to you now</p>
-              <div className="mt-2 flex items-center gap-3">
-                <Avatar user={a} size={40} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-extrabold">{a.name}</p>
-                  <p className="truncate text-xs text-muted">Look for {a.outfit}</p>
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button variant="go" icon="check" onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "met" })}>
-                  We met
-                </Button>
-                <Button
-                  variant="secondary"
-                  icon="x"
-                  onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "missed" })}
-                >
-                  Didn&apos;t show
-                </Button>
-              </div>
-            </div>
-          );
-        })}
-
-        {places(waiting).map((p, i) => {
-          if (p.huddle) {
-            return <PanelHuddleCard key={p.huddle.id} huddle={p.huddle} requests={p.requests} place={i + 1} />;
-          }
-          const r = p.r;
-          const a = state.users.find((u) => u.id === r.attendeeId);
-          if (!a) return null;
-          const shared = sharedInterests(me, a);
-          return (
-            <div key={r.id} className="rounded-2xl border border-line bg-surface p-4">
-              <div className="flex items-start gap-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-black text-on-primary">
-                  {i + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="truncate font-extrabold">{a.name}</p>
-                    <span className="shrink-0 text-xs text-muted">{minutesAgo(r.createdAt, state.now)}</span>
-                  </div>
-                  <p className="text-sm text-muted">{a.headline}</p>
-                  {r.note && <p className="mt-2 rounded-xl bg-surface-2 p-3 text-sm">&ldquo;{r.note}&rdquo;</p>}
-                  {shared.length > 0 && (
-                    <p className="mt-2 text-xs text-muted">
-                      You both like <span className="font-semibold text-ink">{shared.join(", ")}</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button icon="check" onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "accepted" })}>
-                  Accept
-                </Button>
-                <Button
-                  variant="secondary"
-                  icon="x"
-                  onClick={() => dispatch({ type: "setRequestStatus", requestId: r.id, status: "declined" })}
-                >
-                  Not now
-                </Button>
-              </div>
-            </div>
-          );
-        })}
-
-        {queue.length === 0 && (
-          <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">
-            No one in line yet. Stay green so people know you&apos;re free.
-          </p>
-        )}
-      </div>
+      {/* The line itself (accept, decline, We met) is in the Requests tab. */}
+      {inLine > 0 ? (
+        <button
+          onClick={() => dispatch({ type: "resetTo", screen: { name: "requests" } })}
+          className="flex w-full items-center gap-3 rounded-2xl border-2 border-primary bg-primary-soft p-4 text-left transition duration-150 active:scale-[0.99]"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-lg font-black text-on-primary">
+            {inLine}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-extrabold text-primary-ink">
+              {waiting.length > 0
+                ? `${waiting.length} ${waiting.length === 1 ? "person is" : "people are"} waiting`
+                : `${accepted.length} coming to you now`}
+            </span>
+            <span className="block text-sm text-muted">Accept or decline in Requests</span>
+          </span>
+          <Icon name="arrow" size={18} />
+        </button>
+      ) : (
+        <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">
+          No one in line yet. Stay green so people know you&apos;re free.
+        </p>
+      )}
 
       <PeopleYouMissed />
-
-      <MatchInbox title="Match requests" />
     </main>
   );
 }
