@@ -9,12 +9,12 @@ import { minutesAgo } from "@/lib/time";
 import type { ChatRequest } from "@/lib/types";
 import { Avatar, Button, Header, SectionTitle, StatusPill, ZoneBadge } from "../ui";
 
-const pastLabel: Record<string, string> = {
-  met: "You met",
-  missed: "Left before you met",
-  declined: "Couldn't fit you in",
-  cancelled: "You cancelled",
-};
+function pastLabel(r: ChatRequest) {
+  if (r.status === "met") return "You met";
+  if (r.status === "cancelled") return "You cancelled";
+  if (r.closedBecause === "speaker_left") return "Left before you met";
+  return "You didn't get to talk this time";
+}
 
 function Row({ r, children }: { r: ChatRequest; children?: ReactNode }) {
   const { state, navigate } = useApp();
@@ -63,13 +63,14 @@ export function MyRequests() {
   const mine = state.requests.filter((r) => r.attendeeId === me.id).sort((a, b) => b.createdAt - a.createdAt);
   const ready = mine.filter((r) => r.status === "accepted");
   const waiting = mine.filter((r) => r.status === "waiting");
-  const past = mine.filter((r) => !["accepted", "waiting"].includes(r.status));
+  // Never got the chat: the speaker's LinkedIn and a message to send, near the top.
+  const followUps = mine.filter((r) => (r.status === "missed" || r.status === "declined") && r.closedBecause);
+  const past = mine.filter((r) => !["accepted", "waiting"].includes(r.status) && !followUps.includes(r));
 
   return (
     <>
       <Header title="My requests" />
       <main className="px-5 pb-28 pt-2">
-        {me.role === "attendee" && <MatchInbox title="10-min chats" />}
         {mine.length === 0 && (
           <div className="mt-8 rounded-2xl border border-dashed border-line p-6 text-center">
             <p className="font-extrabold">No requests yet</p>
@@ -127,19 +128,31 @@ export function MyRequests() {
           </>
         )}
 
+        {followUps.length > 0 && (
+          <>
+            <SectionTitle>Keep in touch</SectionTitle>
+            <div className="space-y-3">
+              {followUps.map((r) => (
+                <Row key={r.id} r={r}>
+                  <p className="mt-3 text-sm font-semibold text-muted">{pastLabel(r)}</p>
+                  <FollowUp request={r} speaker={state.users.find((u) => u.id === r.panelId)} />
+                </Row>
+              ))}
+            </div>
+          </>
+        )}
+
+        {me.role === "attendee" && <MatchInbox title="10-min chats" />}
+
         {past.length > 0 && (
           <>
             <SectionTitle>Earlier</SectionTitle>
             <div className="space-y-3">
-              {past.map((r) => {
-                const p = state.users.find((u) => u.id === r.panelId);
-                return (
-                  <Row key={r.id} r={r}>
-                    <p className="mt-3 text-sm font-semibold text-muted">{pastLabel[r.status]}</p>
-                    {r.status === "missed" && r.closedBecause === "speaker_left" && <FollowUp request={r} speaker={p} />}
-                  </Row>
-                );
-              })}
+              {past.map((r) => (
+                <Row key={r.id} r={r}>
+                  <p className="mt-3 text-sm font-semibold text-muted">{pastLabel(r)}</p>
+                </Row>
+              ))}
             </div>
           </>
         )}

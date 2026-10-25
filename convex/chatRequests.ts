@@ -3,6 +3,7 @@ import { mutation, query, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { afterRequestChange, proposeFor } from "./huddles";
+import { closeWithoutChat } from "./followUps";
 import { LEAVE_WARNING_MIN } from "../src/lib/time";
 
 const MIN = 60_000;
@@ -98,10 +99,14 @@ export const setStatus = mutation({
           (status === "met" || (status === "cancelled" ? byAttendee : byPanel));
     if (!allowed) throw new ConvexError("This request has already changed.");
 
-    await ctx.db.patch("chatRequests", requestId, {
-      status,
-      ...(status === "accepted" && { acceptedAt: Date.now() }),
-    });
+    // The speaker couldn't get to them: the guest gets their LinkedIn and a message.
+    if (status === "declined" || status === "missed") await closeWithoutChat(ctx, requestId, status, status);
+    else {
+      await ctx.db.patch("chatRequests", requestId, {
+        status,
+        ...(status === "accepted" && { acceptedAt: Date.now() }),
+      });
+    }
     await afterRequestChange(ctx, requestId);
     return null;
   },
@@ -112,6 +117,25 @@ export const forPanel = query({
   args: { panelId: v.id("users") },
   returns: v.array(schema.doc("chatRequests")),
   handler: async (ctx, { panelId }) => activeForPanel(ctx, panelId),
+});
+
+// "People you missed": guests in a speaker's line who never got their chat
+// (the speaker left, declined, or marked them missed), newest first.
+export const missedForPanel = query({
+  args: { panelId: v.id("users") },
+  returns: v.array(schema.doc("chatRequests")),
+  handler: async (ctx, { panelId }) => {
+    const rows: Doc<"chatRequests">[] = [];
+    for (const status of ["missed", "declined"] as const) {
+      const batch = await ctx.db
+        .query("chatRequests")
+        .withIndex("by_panel_status", (q) => q.eq("panelId", panelId).eq("status", status))
+        .order("desc")
+        .take(100);
+      rows.push(...batch.filter((r) => r.closedBecause));
+    }
+    return rows.sort((a, b) => b.createdAt - a.createdAt).slice(0, 50);
+  },
 });
 
 // All of an attendee's own requests, past ones included.

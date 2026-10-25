@@ -135,8 +135,9 @@ export default defineSchema({
     // among its members, which is where the whole huddle stands in line.
     huddleId: v.optional(v.id("huddles")),
     lineAt: v.optional(v.number()),
-    // Missed because the speaker left (or stopped being a speaker), not a no-show.
-    closedBecause: v.optional(v.literal("speaker_left")),
+    // Why the guest never got their chat: the speaker left (or stopped being a
+    // speaker), declined, or marked them missed. Each gets the speaker's LinkedIn.
+    closedBecause: v.optional(v.union(v.literal("speaker_left"), v.literal("declined"), v.literal("missed"))),
     // The follow-up message drafted for the guest after that: by Claude, or the
     // fallback template when Claude isn't available.
     followUp: v.optional(

@@ -8,7 +8,8 @@ import { Me } from "./screens/Me";
 import { MyRequests } from "./screens/MyRequests";
 import { EditProfile } from "./screens/EditProfile";
 import { Events } from "./screens/Events";
-import { JoinEvent, MatchInput, ProfileSetup } from "./screens/Onboarding";
+import { looksLikeLinkedin } from "@/lib/links";
+import { AddLinkedin, JoinEvent, MatchInput, ProfileSetup } from "./screens/Onboarding";
 import { PanelDetail } from "./screens/PanelDetail";
 import { PanelNow } from "./screens/PanelNow";
 import { Welcome } from "./screens/Welcome";
@@ -54,6 +55,11 @@ function Router() {
   useEffect(() => {
     scrollAppToTop();
   }, [state.stack.length, screen.name]);
+
+  // Profiles from before LinkedIn was required add it before anything else.
+  const needsLinkedin =
+    !!state.profile && !looksLikeLinkedin(state.profile.linkedinUrl ?? "") && screen.name !== "welcome" && screen.name !== "profileSetup";
+  if (needsLinkedin) return <AddLinkedin />;
 
   const withTabs = (node: ReactNode, home = false) => (
     <>

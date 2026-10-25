@@ -65,7 +65,7 @@ export type ProfileInput = {
   name: string;
   headline: string;
   interests: string[];
-  linkedinUrl?: string;
+  linkedinUrl: string;
   contactUrl?: string;
 };
 
@@ -137,6 +137,9 @@ type Action =
   | { type: "updateMe"; patch: { zoneId?: string; outfit?: string; shareWith?: ShareWith; requestsPaused?: boolean; openToHuddles?: boolean } }
   | { type: "setStatus"; status: Exclude<Status, "leaving"> }
   | { type: "setLeaving"; minutes: number }
+  | { type: "leaveNow" }
+  | { type: "comeBack" }
+  | { type: "saveLinkedin"; linkedinUrl: string }
   | { type: "askStillHere"; userId: string }
   | { type: "confirmStillHere" }
   | { type: "huddleRespond"; huddleId: string; accept: boolean }
@@ -304,6 +307,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setHuddleStatus = useMutation(api.huddles.setGroupStatus);
   const connectByCode = useMutation(api.connections.connectByCode);
   const removeConnection = useMutation(api.connections.remove);
+  const leaveNow = useMutation(api.leaving.leaveNow);
+  const comeBack = useMutation(api.leaving.comeBack);
   const createRequest = useMutation(api.chatRequests.create);
   const setRequestStatus = useMutation(api.chatRequests.setStatus);
   const suggestMatches = useAction(api.matchesNode.suggest);
@@ -378,6 +383,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const myLine = useLatest(useQuery(api.chatRequests.forPanel, viewerId ? { panelId: viewerId } : "skip"));
   const mySent = useLatest(useQuery(api.chatRequests.forAttendee, viewerId ? { attendeeId: viewerId } : "skip"));
+  const myMissed = useLatest(useQuery(api.chatRequests.missedForPanel, viewerId ? { panelId: viewerId } : "skip"));
   const myHuddles = useLatest(useQuery(api.huddles.forAttendee, viewerId ? { attendeeId: viewerId } : "skip"));
   const lineHuddles = useLatest(useQuery(api.huddles.forPanel, viewerId ? { panelId: viewerId } : "skip"));
   const summary = useLatest(useQuery(api.activity.summary, eventId ? { eventId: eventId as Id<"events"> } : "skip"));
@@ -468,7 +474,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         lineAt: r.lineAt,
       });
     }
-    for (const r of [...(myLine ?? []), ...(mySent ?? [])]) {
+    for (const r of [...(myLine ?? []), ...(myMissed ?? []), ...(mySent ?? [])]) {
       byId.set(r._id, {
         id: r._id,
         panelId: r.panelId,
@@ -485,7 +491,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     }
     return [...byId.values()];
-  }, [openLines, myLine, mySent]);
+  }, [openLines, myLine, myMissed, mySent]);
 
   const huddles = useMemo<Huddle[]>(() => {
     const byId = new Map<string, Huddle>();
@@ -536,13 +542,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (r.status === "accepted") {
           const zone = zones.find((z) => z.id === panel.zoneId);
           localDispatch({ type: "toast", message: `${panel.name} is ready for you at ${zone?.name ?? "their zone"}.` });
-        } else if (r.status === "missed" && r.closedBecause === "speaker_left") {
+        } else if ((r.status === "missed" || r.status === "declined") && r.closedBecause) {
           const first = panel.name.split(" ")[0];
+          const what = r.closedBecause === "speaker_left" ? `${first} has left.` : `${first} couldn't get to you this time.`;
           localDispatch({
             type: "toast",
             message: panel.linkedinUrl
-              ? `${first} has left. Keep the conversation going on LinkedIn.`
-              : `${first} has left. Keep the conversation going with a quick message.`,
+              ? `${what} Keep the conversation going on LinkedIn.`
+              : `${what} Keep the conversation going with a quick message.`,
           });
         }
       }
@@ -734,8 +741,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               updateProfile({
                 profileId: profileId as Id<"profiles">,
                 ...profile,
-                // Empty strings clear a link.
-                linkedinUrl: profile.linkedinUrl ?? "",
+                // An empty string clears the other link. LinkedIn is required.
                 contactUrl: profile.contactUrl ?? "",
               }),
               myUserId &&
@@ -769,6 +775,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         case "setLeaving":
           if (meId) run(setUserStatus({ id: meId, status: "leaving", leavingInMin: action.minutes }));
+          return;
+
+        case "leaveNow":
+          if (meId) run(leaveNow({ userId: meId }));
+          return;
+
+        case "comeBack":
+          if (meId) run(comeBack({ userId: meId }));
+          return;
+
+        case "saveLinkedin":
+          if (!profileId) return;
+          once(() =>
+            updateProfile({ profileId: profileId as Id<"profiles">, linkedinUrl: action.linkedinUrl }).then(() =>
+              localDispatch({ type: "toast", message: "LinkedIn saved." }),
+            ),
+          );
           return;
 
         case "askStillHere": {
@@ -899,6 +922,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       joinEvent,
       updateUser,
       setUserStatus,
+      leaveNow,
+      comeBack,
       askStillHere,
       confirmStillHere,
       huddleRespond,

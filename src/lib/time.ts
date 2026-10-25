@@ -16,6 +16,23 @@ export function minutesUntil(ts: number, now: number): number {
   return Math.max(0, Math.ceil((ts - now) / MIN));
 }
 
+// Leaving times a speaker can type in, in minutes.
+export const LEAVING_MIN_MAX = 180;
+
+// Time left before a speaker leaves, the same everywhere it shows: "10 min"
+// right after picking 10, "9 min" a minute later, then seconds in the last
+// minute. now must be server time (store's state.now is).
+export function timeLeft(leavingAt: number, now: number): { value: number; unit: "min" | "sec" } {
+  const ms = Math.max(0, leavingAt - now);
+  if (ms < MIN) return { value: Math.ceil(ms / 1000), unit: "sec" };
+  return { value: Math.ceil(ms / MIN), unit: "min" };
+}
+
+export function timeLeftLabel(leavingAt: number, now: number): string {
+  const { value, unit } = timeLeft(leavingAt, now);
+  return value === 0 ? "now" : `${value} ${unit}`;
+}
+
 export function isStale(updatedAt: number, now: number): boolean {
   return now - updatedAt > STALE_AFTER_MIN * MIN;
 }

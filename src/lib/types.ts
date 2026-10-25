@@ -135,8 +135,9 @@ export type ChatRequest = {
   // Set while part of a formed huddle; lineAt is where the whole huddle stands in line.
   huddleId?: string;
   lineAt?: number;
-  // Missed because the speaker left, and the message drafted for me to send them.
-  closedBecause?: "speaker_left";
+  // Why I never got my chat (the speaker left, declined, or marked me missed),
+  // and the message drafted for me to send them.
+  closedBecause?: "speaker_left" | "declined" | "missed";
   followUp?: { text: string; source: "claude" | "template" };
 };
 

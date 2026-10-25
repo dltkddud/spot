@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { record } from "./activity";
+import { closeWithoutChat } from "./followUps";
 
 // A huddle is 2-3 attendees in the same speaker's line who share an interest
 // and meet the speaker together. Matching, answers, and line position all
@@ -236,7 +237,9 @@ export const setGroupStatus = mutation({
       const req = await ctx.db.get("chatRequests", m.requestId);
       if (!req) continue;
       const ok = status === "accepted" ? req.status === "waiting" : req.status === "waiting" || req.status === "accepted";
-      if (ok) await ctx.db.patch("chatRequests", req._id, { status, ...(status === "accepted" && { acceptedAt: now }) });
+      if (!ok) continue;
+      if (status === "declined" || status === "missed") await closeWithoutChat(ctx, req._id, status, status);
+      else await ctx.db.patch("chatRequests", req._id, { status, ...(status === "accepted" && { acceptedAt: now }) });
     }
     if (status === "met") await end(ctx, huddle, "met");
     else if (status !== "accepted") await end(ctx, huddle, "dissolved");

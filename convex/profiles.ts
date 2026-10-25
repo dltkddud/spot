@@ -8,13 +8,16 @@ import { proposeFor } from "./huddles";
 // connect code. What they do at a given event lives in users (one row per event).
 
 const LINKEDIN = /^(https?:\/\/)?([a-z]{2,3}\.)?linkedin\.com\/\S+$/i;
+// What a new or edited profile needs: a personal profile link, linkedin.com/in/<name>.
+const LINKEDIN_PROFILE = /^(https?:\/\/)?([a-z]{2,3}\.)?linkedin\.com\/in\/[^\s/?#]+\/?([?#]\S*)?$/i;
 
 const withScheme = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
 
+// LinkedIn is required, so people a speaker couldn't get to can still reach them.
 export function cleanLinkedin(url: string | undefined) {
   const t = url?.trim();
-  if (!t) return undefined;
-  if (!LINKEDIN.test(t)) throw new ConvexError("That doesn't look like a LinkedIn link (linkedin.com/in/…).");
+  if (!t) throw new ConvexError("Add your LinkedIn, so people you miss can still reach you.");
+  if (!LINKEDIN_PROFILE.test(t)) throw new ConvexError("That doesn't look like a LinkedIn profile link (linkedin.com/in/…).");
   return withScheme(t);
 }
 

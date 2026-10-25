@@ -5,8 +5,9 @@ import { linkHref } from "@/lib/links";
 import type { ChatRequest, User } from "@/lib/types";
 import { AiTag, Icon, PillButton } from "./ui";
 
-// After a speaker leaves with me still in line: their LinkedIn, a message I can
-// send (drafted by Claude, or a template), and their other link.
+// When I never got my chat (the speaker left, declined, or marked me missed):
+// their LinkedIn, a message I can send (drafted by Claude, or a template), and
+// their other link.
 export function FollowUp({ request, speaker }: { request: ChatRequest; speaker?: User }) {
   const [edited, setEdited] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -31,7 +32,10 @@ export function FollowUp({ request, speaker }: { request: ChatRequest; speaker?:
     <section className="mt-3 rounded-2xl border border-primary/30 bg-primary-soft p-4">
       <p className="font-extrabold text-primary-ink">Keep the conversation going</p>
       <p className="mt-0.5 text-sm text-muted">
-        {first} left before your turn. Here&apos;s a message you can send.
+        {request.closedBecause === "speaker_left"
+          ? `${first} left before your turn.`
+          : `You didn't get to talk with ${first} this time.`}{" "}
+        Here&apos;s a message you can send.
       </p>
 
       {speaker?.linkedinUrl && (

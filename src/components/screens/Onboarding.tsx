@@ -18,7 +18,7 @@ export type ProfileDraft = { name: string; headline: string; interests: string[]
 export const emptyProfile: ProfileDraft = { name: "", headline: "", interests: [], linkedinUrl: "", contactUrl: "" };
 
 export function profileReady(p: ProfileDraft) {
-  return !!p.name.trim() && !!p.headline.trim() && p.interests.length > 0 && (!p.linkedinUrl.trim() || looksLikeLinkedin(p.linkedinUrl));
+  return !!p.name.trim() && !!p.headline.trim() && p.interests.length > 0 && looksLikeLinkedin(p.linkedinUrl);
 }
 
 export function toProfileInput(p: ProfileDraft): ProfileInput {
@@ -26,9 +26,62 @@ export function toProfileInput(p: ProfileDraft): ProfileInput {
     name: p.name.trim(),
     headline: p.headline.trim(),
     interests: p.interests,
-    linkedinUrl: p.linkedinUrl.trim() || undefined,
+    linkedinUrl: p.linkedinUrl.trim(),
     contactUrl: p.contactUrl.trim() || undefined,
   };
+}
+
+// Required: people a speaker couldn't get to (and speakers I miss) reach me here.
+export function LinkedinField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const bad = !!value.trim() && !looksLikeLinkedin(value);
+  return (
+    <Field
+      label="LinkedIn"
+      hint={
+        <span className={bad ? "font-bold text-busy-ink" : ""}>
+          {bad
+            ? "Use your profile link, like linkedin.com/in/yourname."
+            : "Required, so people you miss can still reach you."}
+        </span>
+      }
+    >
+      <input
+        className={inputClass}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        inputMode="url"
+        autoComplete="url"
+        placeholder="linkedin.com/in/yourname"
+      />
+    </Field>
+  );
+}
+
+// Profiles made before LinkedIn was required: add it before anything else.
+export function AddLinkedin() {
+  const { dispatch } = useApp();
+  const [url, setUrl] = useState("");
+  return (
+    <>
+      <Header title="One more thing" />
+      <main className="px-5 pb-12 pt-6">
+        <h2 className="text-2xl font-black">Add your LinkedIn to continue</h2>
+        <p className="mb-6 mt-2 text-muted">
+          If a speaker can&apos;t get to you, or you miss them, this is how you&apos;ll still connect.
+        </p>
+        <LinkedinField value={url} onChange={setUrl} />
+        <Button
+          block
+          icon="check"
+          className="mt-8"
+          disabled={!looksLikeLinkedin(url)}
+          onClick={() => dispatch({ type: "saveLinkedin", linkedinUrl: url.trim() })}
+        >
+          Save and continue
+        </Button>
+      </main>
+    </>
+  );
 }
 
 // Who I am at every event: name, one line, interests, LinkedIn, another link.
@@ -42,7 +95,6 @@ export function ProfileFields({ value, onChange }: { value: ProfileDraft; onChan
           ? [...value.interests, i]
           : value.interests,
     });
-  const badLinkedin = !!value.linkedinUrl.trim() && !looksLikeLinkedin(value.linkedinUrl);
 
   return (
     <div className="space-y-6">
@@ -72,24 +124,7 @@ export function ProfileFields({ value, onChange }: { value: ProfileDraft; onChan
         </div>
       </div>
 
-      <Field
-        label="LinkedIn"
-        hint={
-          <span className={badLinkedin ? "font-bold text-busy-ink" : ""}>
-            {badLinkedin
-              ? "That doesn't look like a LinkedIn link (linkedin.com/in/…)."
-              : "Optional. Add your LinkedIn so people you miss can still reach you."}
-          </span>
-        }
-      >
-        <input
-          className={inputClass}
-          value={value.linkedinUrl}
-          onChange={(e) => set({ linkedinUrl: e.target.value })}
-          inputMode="url"
-          placeholder="linkedin.com/in/yourname"
-        />
-      </Field>
+      <LinkedinField value={value.linkedinUrl} onChange={(linkedinUrl) => set({ linkedinUrl })} />
 
       <Field label="Other link" hint="Optional. Personal site, GitHub, or email.">
         <input

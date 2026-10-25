@@ -1,7 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, mutation, type MutationCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import { closeWithoutChat } from "./followUps";
 import { LEAVE_WARNING_MIN } from "../src/lib/time";
 import { dissolveAllFor } from "./huddles";
 import { cancelMatchesFor } from "./matches";
@@ -26,10 +27,7 @@ async function activeRequests(ctx: MutationCtx, panelId: Id<"users">) {
 // each of them gets a follow-up message drafted (shown with the speaker's LinkedIn).
 export async function closeLine(ctx: MutationCtx, panelId: Id<"users">) {
   await dissolveAllFor(ctx, panelId);
-  for (const r of await activeRequests(ctx, panelId)) {
-    await ctx.db.patch("chatRequests", r._id, { status: "missed", closedBecause: "speaker_left" });
-    await ctx.scheduler.runAfter(0, internal.followUpsNode.draft, { requestId: r._id });
-  }
+  for (const r of await activeRequests(ctx, panelId)) await closeWithoutChat(ctx, r._id, "missed", "speaker_left");
 }
 
 // Call after setting a speaker's leavingAt. Older jobs see a different
@@ -58,25 +56,64 @@ export const warn = internalMutation({
   },
 });
 
-// At leavingAt: huddles break up, open requests become missed, open 10-min chats are
-// cancelled, the speaker is hidden and their zone cleared.
+// The speaker is gone: huddles break up, open requests become missed (with
+// LinkedIn and a follow-up for each guest), open 10-min chats are cancelled,
+// and the speaker is hidden with their zone cleared (kept in leftFrom).
+async function goAway(ctx: MutationCtx, user: Doc<"users">) {
+  await closeLine(ctx, user._id);
+  await cancelMatchesFor(ctx, user._id);
+  await ctx.db.patch("users", user._id, {
+    leftFrom: { zoneId: user.zoneId, shareWith: shareWithOf(user) },
+    visible: false,
+    shareWith: "nobody",
+    zoneId: undefined,
+    stillHereAskedAt: undefined,
+    updatedAt: Date.now(),
+  });
+}
+
+// At leavingAt, unless the speaker changed or cancelled their time since.
 export const leave = internalMutation({
   args: { userId: v.id("users"), leavingAt: v.number() },
   returns: v.null(),
   handler: async (ctx, { userId, leavingAt }) => {
     const user = await stillLeavingAt(ctx, userId, leavingAt);
-    if (!user) return null;
-    await closeLine(ctx, userId);
-    await cancelMatchesFor(ctx, userId);
+    if (user) await goAway(ctx, user);
+    return null;
+  },
+});
+
+// "Leaving now" on the speaker's Now screen: everything above, right away.
+export const leaveNow = mutation({
+  args: { userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get("users", userId);
+    if (!user) throw new ConvexError("User not found.");
+    const leavingAt = Date.now();
+    await ctx.db.patch("users", userId, { status: "leaving", leavingAt, updatedAt: leavingAt });
+    await goAway(ctx, { ...user, status: "leaving", leavingAt });
+    return null;
+  },
+});
+
+// "I'm back": a speaker who left shows up where they were, free to talk.
+export const comeBack = mutation({
+  args: { userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get("users", userId);
+    if (!user) throw new ConvexError("User not found.");
+    const back = user.leftFrom ?? { zoneId: user.zoneId, shareWith: "everyone" as const };
     await ctx.db.patch("users", userId, {
-      leftFrom: { zoneId: user.zoneId, shareWith: shareWithOf(user) },
-      visible: false,
-      shareWith: "nobody",
-      zoneId: undefined,
-      stillHereAskedAt: undefined,
+      status: "available",
+      leavingAt: undefined,
+      leftFrom: undefined,
+      zoneId: back.zoneId,
+      shareWith: back.shareWith,
+      visible: back.shareWith === "everyone",
       updatedAt: Date.now(),
     });
     return null;
   },
 });
-
