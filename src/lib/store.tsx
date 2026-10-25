@@ -118,6 +118,8 @@ type Action =
   | { type: "updateMe"; patch: { zoneId?: string; outfit?: string; shareWith?: ShareWith; requestsPaused?: boolean; openToHuddles?: boolean } }
   | { type: "setStatus"; status: Exclude<Status, "leaving"> }
   | { type: "setLeaving"; minutes: number }
+  | { type: "askStillHere"; userId: string }
+  | { type: "confirmStillHere" }
   | { type: "huddleRespond"; huddleId: string; accept: boolean }
   | { type: "setHuddleStatus"; huddleId: string; status: "accepted" | "declined" | "met" | "missed" }
   | { type: "simulateHuddle" }
@@ -293,6 +295,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const joinEvent = useMutation(api.events.join);
   const updateUser = useMutation(api.users.update);
   const setUserStatus = useMutation(api.users.setStatus);
+  const askStillHere = useMutation(api.users.askStillHere);
+  const confirmStillHere = useMutation(api.users.confirmStillHere);
   const huddleRespond = useMutation(api.huddles.respond);
   const setHuddleStatus = useMutation(api.huddles.setGroupStatus);
   const demoHuddle = useMutation(api.huddles.demoPropose);
@@ -518,6 +522,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [viewerId, users, zones, mySent]);
 
+  // Banner once someone I asked "Still here?" answers (or updates anything).
+  // Kept per viewer in this browser: user id -> their updatedAt when I asked.
+  const askedStillHere = useRef<{ viewerId: string | null; at: Map<string, number> }>({ viewerId: null, at: new Map() });
+  useEffect(() => {
+    if (!users) return;
+    if (askedStillHere.current.viewerId !== viewerId) askedStillHere.current = { viewerId, at: new Map() };
+    const { at } = askedStillHere.current;
+    for (const [userId, before] of at) {
+      const u = users.find((x) => x.id === userId);
+      if (!u) {
+        at.delete(userId);
+        continue;
+      }
+      if (u.updatedAt <= before) continue;
+      at.delete(userId);
+      const first = u.name.split(" ")[0];
+      const zone = zones.find((z) => z.id === u.zoneId);
+      localDispatch({
+        type: "toast",
+        message: u.visible && zone ? `${first} just confirmed: ${zone.name}.` : `${first} isn't sharing a zone anymore.`,
+      });
+    }
+  }, [viewerId, users, zones]);
+
   // Banners for huddles: a new suggestion for me, and a huddle becoming ready.
   const seenHuddles = useRef<{ viewerId: string; status: Map<string, string>; loaded: boolean } | null>(null);
   useEffect(() => {
@@ -669,6 +697,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (meId) run(setUserStatus({ id: meId, status: "leaving", leavingInMin: action.minutes }));
           return;
 
+        case "askStillHere": {
+          if (!meId) return;
+          const target = users.find((u) => u.id === action.userId);
+          run(
+            askStillHere({ id: action.userId as Id<"users">, askerId: meId }).then(() => {
+              if (target) askedStillHere.current.at.set(action.userId, target.updatedAt);
+              const first = target?.name.split(" ")[0] ?? "They";
+              localDispatch({ type: "toast", message: `Asked ${first}. We'll let you know when they answer.` });
+            }),
+          );
+          return;
+        }
+
+        case "confirmStillHere":
+          if (meId) run(confirmStillHere({ id: meId }));
+          return;
+
         case "huddleRespond":
           if (meId) run(huddleRespond({ huddleId: action.huddleId as Id<"huddles">, userId: meId, accept: action.accept }));
           return;
@@ -813,6 +858,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       joinEvent,
       updateUser,
       setUserStatus,
+      askStillHere,
+      confirmStillHere,
       huddleRespond,
       setHuddleStatus,
       demoHuddle,

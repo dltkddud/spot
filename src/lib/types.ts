@@ -60,6 +60,8 @@ export type User = {
   visible: boolean;
   requestsPaused: boolean;
   updatedAt: number;
+  // Someone asked "Still here?" and I haven't answered yet.
+  stillHereAskedAt?: number;
   seedKey?: string;
   openToHuddles?: boolean;
   // Who sees my zone. Others' visible is already worked out for me by the server.
