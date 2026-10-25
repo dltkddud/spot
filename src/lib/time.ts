@@ -27,6 +27,39 @@ export function clockTime(ts: number): string {
   return new Date(ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: VENUE_TIME_ZONE });
 }
 
+const venueParts = (ts: number) =>
+  Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: VENUE_TIME_ZONE,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      hourCycle: "h23",
+    })
+      .formatToParts(ts)
+      .map((p) => [p.type, Number(p.value)]),
+  ) as Record<"year" | "month" | "day" | "hour" | "minute", number>;
+
+// "15:30" for a time input, in venue time.
+export function venueHhmm(ts: number): string {
+  const p = venueParts(ts);
+  return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;
+}
+
+// A time input's "15:30" as a timestamp: that time today at the venue.
+export function venueTimeToday(hhmm: string, now: number): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+  if (!m) return null;
+  const today = venueParts(now);
+  const asUtc = Date.UTC(today.year, today.month - 1, today.day, Number(m[1]), Number(m[2]));
+  // How far the venue clock is from UTC around then (e.g. -7 hours in PDT).
+  const there = venueParts(asUtc);
+  const offset = Date.UTC(there.year, there.month - 1, there.day, there.hour, there.minute) - asUtc;
+  return asUtc - offset;
+}
+
 // e.g. "Sun 4:00 PM"
 export function dayTime(ts: number): string {
   return new Date(ts).toLocaleString("en-US", {

@@ -11,11 +11,27 @@ const LINKEDIN = /^(https?:\/\/)?([a-z]{2,3}\.)?linkedin\.com\/\S+$/i;
 
 const withScheme = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
 
+// LinkedIn is required and is how people log back in, so every way of writing
+// the same link (http, no www, trailing slash, ?query, capitals) becomes one:
+// https://www.linkedin.com/in/yourname
 export function cleanLinkedin(url: string | undefined) {
   const t = url?.trim();
-  if (!t) return undefined;
+  if (!t) throw new ConvexError("Add your LinkedIn (linkedin.com/in/…).");
   if (!LINKEDIN.test(t)) throw new ConvexError("That doesn't look like a LinkedIn link (linkedin.com/in/…).");
-  return withScheme(t);
+  const path = t
+    .replace(/^.*?linkedin\.com/i, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+  if (!path) throw new ConvexError("That doesn't look like a LinkedIn link (linkedin.com/in/…).");
+  return `https://www.linkedin.com${path}`;
+}
+
+async function profileWithLinkedin(ctx: QueryCtx, linkedinUrl: string) {
+  return await ctx.db
+    .query("profiles")
+    .withIndex("by_linkedin", (q) => q.eq("linkedinUrl", linkedinUrl))
+    .first();
 }
 
 function cleanLink(url: string | undefined) {
@@ -85,22 +101,26 @@ const toView = (p: Doc<"profiles">) => ({
   openToHuddles: p.openToHuddles,
 });
 
-// First run: the profile that every event will share.
+// First run: the profile that every event will share. One profile per LinkedIn.
 export const create = mutation({
   args: {
     name: v.string(),
     headline: v.string(),
     interests: v.array(v.string()),
-    linkedinUrl: v.optional(v.string()),
+    linkedinUrl: v.string(),
     contactUrl: v.optional(v.string()),
   },
   returns: v.id("profiles"),
   handler: async (ctx, args) => {
+    const linkedinUrl = cleanLinkedin(args.linkedinUrl);
+    if (await profileWithLinkedin(ctx, linkedinUrl)) {
+      throw new ConvexError("That LinkedIn is already on Spot. Log in instead.");
+    }
     return await ctx.db.insert("profiles", {
       name: cleanName(args.name),
       headline: args.headline.trim(),
       interests: args.interests,
-      linkedinUrl: cleanLinkedin(args.linkedinUrl),
+      linkedinUrl,
       contactUrl: cleanLink(args.contactUrl),
       connectCode: await newConnectCode(ctx),
       createdAt: Date.now(),
@@ -109,7 +129,7 @@ export const create = mutation({
 });
 
 // Me → Edit profile, and the huddle switch. Changes show at every event.
-// An empty link clears it.
+// An empty other link clears it; LinkedIn can change but never be empty.
 export const update = mutation({
   args: {
     profileId: v.id("profiles"),
@@ -124,11 +144,16 @@ export const update = mutation({
   handler: async (ctx, { profileId, name, headline, interests, linkedinUrl, contactUrl, openToHuddles }) => {
     const profile = await ctx.db.get("profiles", profileId);
     if (!profile) throw new ConvexError("Profile not found.");
+    const linkedin = linkedinUrl !== undefined ? cleanLinkedin(linkedinUrl) : undefined;
+    if (linkedin && linkedin !== profile.linkedinUrl) {
+      const taken = await profileWithLinkedin(ctx, linkedin);
+      if (taken && taken._id !== profileId) throw new ConvexError("Someone else on Spot already uses that LinkedIn.");
+    }
     await ctx.db.patch("profiles", profileId, {
       ...(name !== undefined && { name: cleanName(name) }),
       ...(headline !== undefined && { headline: headline.trim() }),
       ...(interests !== undefined && { interests }),
-      ...(linkedinUrl !== undefined && { linkedinUrl: cleanLinkedin(linkedinUrl) }),
+      ...(linkedin !== undefined && { linkedinUrl: linkedin }),
       ...(contactUrl !== undefined && { contactUrl: cleanLink(contactUrl) }),
       ...(openToHuddles !== undefined && { openToHuddles }),
     });
@@ -147,6 +172,17 @@ export const update = mutation({
       }
     }
     return null;
+  },
+});
+
+// "Log in": no passwords at a hackathon, so the LinkedIn link finds the profile.
+export const logIn = mutation({
+  args: { linkedinUrl: v.string() },
+  returns: v.id("profiles"),
+  handler: async (ctx, { linkedinUrl }) => {
+    const profile = await profileWithLinkedin(ctx, cleanLinkedin(linkedinUrl));
+    if (!profile) throw new ConvexError("No profile with that LinkedIn yet. Get started to make one.");
+    return profile._id;
   },
 });
 

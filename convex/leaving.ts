@@ -1,6 +1,6 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, mutation, type MutationCtx } from "./_generated/server";
+import { internalMutation, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { LEAVE_WARNING_MIN } from "../src/lib/time";
 import { dissolveAllFor } from "./huddles";
@@ -73,25 +73,6 @@ export const leave = internalMutation({
       stillHereAskedAt: undefined,
       updatedAt: Date.now(),
     });
-    return null;
-  },
-});
-
-// Demo control: a speaker I'm waiting for leaves right now, so the missed
-// request, LinkedIn and follow-up message can be shown without waiting.
-export const demoLeaveNow = mutation({
-  args: { attendeeId: v.id("users") },
-  returns: v.null(),
-  handler: async (ctx, { attendeeId }) => {
-    const mine = await ctx.db
-      .query("chatRequests")
-      .withIndex("by_attendee", (q) => q.eq("attendeeId", attendeeId))
-      .take(200);
-    const req = mine.find((r) => r.status === "waiting" || r.status === "accepted");
-    if (!req) throw new ConvexError("Send a chat request first, then try this again.");
-    const leavingAt = Date.now();
-    await ctx.db.patch("users", req.panelId, { status: "leaving", leavingAt, updatedAt: leavingAt });
-    await ctx.scheduler.runAfter(0, internal.leaving.leave, { userId: req.panelId, leavingAt });
     return null;
   },
 });

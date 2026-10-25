@@ -18,7 +18,7 @@ export type ProfileDraft = { name: string; headline: string; interests: string[]
 export const emptyProfile: ProfileDraft = { name: "", headline: "", interests: [], linkedinUrl: "", contactUrl: "" };
 
 export function profileReady(p: ProfileDraft) {
-  return !!p.name.trim() && !!p.headline.trim() && p.interests.length > 0 && (!p.linkedinUrl.trim() || looksLikeLinkedin(p.linkedinUrl));
+  return !!p.name.trim() && !!p.headline.trim() && p.interests.length > 0 && looksLikeLinkedin(p.linkedinUrl);
 }
 
 export function toProfileInput(p: ProfileDraft): ProfileInput {
@@ -26,7 +26,7 @@ export function toProfileInput(p: ProfileDraft): ProfileInput {
     name: p.name.trim(),
     headline: p.headline.trim(),
     interests: p.interests,
-    linkedinUrl: p.linkedinUrl.trim() || undefined,
+    linkedinUrl: p.linkedinUrl.trim(),
     contactUrl: p.contactUrl.trim() || undefined,
   };
 }
@@ -78,7 +78,7 @@ export function ProfileFields({ value, onChange }: { value: ProfileDraft; onChan
           <span className={badLinkedin ? "font-bold text-busy-ink" : ""}>
             {badLinkedin
               ? "That doesn't look like a LinkedIn link (linkedin.com/in/…)."
-              : "Optional. Add your LinkedIn so people you miss can still reach you."}
+              : "People you miss can still reach you. You also use it to log in."}
           </span>
         }
       >
@@ -223,6 +223,53 @@ export function MatchInputFields({ value, onChange }: { value: MatchDraft; onCha
 export function eventReady(e: EventDraft) {
   const words = wordCount(e.outfit);
   return !!e.role && words > 0 && words <= OUTFIT_WORD_LIMIT;
+}
+
+// Coming back on another browser, or after logging out: LinkedIn finds the profile.
+export function LogIn() {
+  const { dispatch, back, navigate } = useApp();
+  const [linkedinUrl, setLinkedinUrl] = useState("");
+  const bad = !!linkedinUrl.trim() && !looksLikeLinkedin(linkedinUrl);
+  return (
+    <>
+      <Header title="Log in" onBack={back} />
+      <main className="px-5 pb-12 pt-6">
+        <p className="mb-6 text-muted">Enter the LinkedIn you used when you made your profile.</p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (looksLikeLinkedin(linkedinUrl)) dispatch({ type: "logIn", linkedinUrl: linkedinUrl.trim() });
+          }}
+        >
+          <Field
+            label="LinkedIn"
+            hint={bad && <span className="font-bold text-busy-ink">That doesn&apos;t look like a LinkedIn link (linkedin.com/in/…).</span>}
+          >
+            <input
+              className={inputClass}
+              value={linkedinUrl}
+              onChange={(e) => setLinkedinUrl(e.target.value)}
+              inputMode="url"
+              autoFocus
+              placeholder="linkedin.com/in/yourname"
+            />
+          </Field>
+          <Button type="submit" block icon="arrow" className="mt-8" disabled={!looksLikeLinkedin(linkedinUrl)}>
+            Log in
+          </Button>
+        </form>
+        <p className="mt-6 text-center text-sm text-muted">
+          New to Spot?{" "}
+          <button
+            onClick={() => navigate({ name: "profileSetup" }, true)}
+            className="font-bold text-primary-ink underline underline-offset-2"
+          >
+            Make a profile
+          </button>
+        </p>
+      </main>
+    </>
+  );
 }
 
 // First run, once: the profile every event will share.

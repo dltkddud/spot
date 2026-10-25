@@ -2,16 +2,28 @@
 
 import { sharedInterests } from "@/lib/recommend";
 import { queueFor, useApp } from "@/lib/store";
-import { clockTime, minutesAgo, minutesUntil } from "@/lib/time";
+import { useState } from "react";
+import { clockTime, minutesAgo, minutesUntil, venueHhmm, venueTimeToday } from "@/lib/time";
 import type { ChatRequest, Huddle } from "@/lib/types";
 import { PanelHuddleCard } from "../Huddle";
 import { MatchInbox } from "../Matches";
-import { Avatar, Button, Icon, SectionTitle } from "../ui";
+import { Avatar, Button, Icon, inputClass, SectionTitle } from "../ui";
 import { MyBar } from "./Discover";
+
+const MIN = 60_000;
+
+const leaveButton = (selected: boolean) =>
+  `rounded-full border py-3 text-sm font-bold transition duration-150 active:scale-[0.96] ${
+    selected ? "border-primary bg-primary-soft text-primary-ink" : "border-line bg-surface hover:border-primary/50 hover:bg-primary-soft"
+  }`;
 
 export function PanelNow() {
   const { state, me, dispatch, navigate } = useApp();
+  // "Other": a time today, typed in.
+  const [picking, setPicking] = useState(false);
+  const [time, setTime] = useState("");
   if (!me) return null;
+  const pickedAt = venueTimeToday(time, state.now);
 
   const queue = queueFor(state.requests, me.id);
   const accepted = queue.filter((r) => r.status === "accepted");
@@ -69,16 +81,57 @@ export function PanelNow() {
       <div className="mt-4">
         <p className="mb-2 text-sm font-bold">Leaving soon?</p>
         <div className="grid grid-cols-3 gap-2">
-          {[10, 30, 60].map((m) => (
+          {[10, 30].map((m) => (
             <button
               key={m}
-              onClick={() => dispatch({ type: "setLeaving", minutes: m })}
-              className="rounded-full border border-line bg-surface py-3 text-sm font-bold transition duration-150 hover:border-primary/50 hover:bg-primary-soft active:scale-[0.96]"
+              onClick={() => {
+                setPicking(false);
+                dispatch({ type: "setLeaving", leavingAt: Date.now() + m * MIN });
+              }}
+              className={leaveButton(false)}
             >
-              {m === 60 ? "In 1 hour" : `In ${m} min`}
+              In {m} min
             </button>
           ))}
+          <button
+            onClick={() => {
+              if (!picking) setTime(venueHhmm(Date.now() + 60 * MIN));
+              setPicking(!picking);
+            }}
+            aria-expanded={picking}
+            className={leaveButton(picking)}
+          >
+            Other
+          </button>
         </div>
+        {picking && (
+          <form
+            className="mt-2 flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!pickedAt || pickedAt <= Date.now()) return;
+              setPicking(false);
+              dispatch({ type: "setLeaving", leavingAt: pickedAt });
+            }}
+          >
+            <label className="sr-only" htmlFor="leaving-at">
+              Leaving at
+            </label>
+            <input
+              id="leaving-at"
+              type="time"
+              className={inputClass}
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+            />
+            <Button type="submit" icon="check" disabled={!pickedAt || pickedAt <= state.now}>
+              Set
+            </Button>
+          </form>
+        )}
+        {picking && pickedAt !== null && pickedAt <= state.now && (
+          <p className="mt-2 text-xs font-bold text-busy-ink">Pick a time later than now.</p>
+        )}
         {me.status === "leaving" && me.leavingAt && (
           <p className="mt-2 text-xs text-muted">
             You&apos;re leaving at {clockTime(me.leavingAt)}.{" "}
