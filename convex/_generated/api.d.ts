@@ -15,6 +15,8 @@ import type * as chatRequests from "../chatRequests.js";
 import type * as cleanup from "../cleanup.js";
 import type * as clock from "../clock.js";
 import type * as connections from "../connections.js";
+import type * as crons from "../crons.js";
+import type * as demoPeople from "../demoPeople.js";
 import type * as events from "../events.js";
 import type * as followUps from "../followUps.js";
 import type * as followUpsNode from "../followUpsNode.js";
@@ -41,6 +43,8 @@ declare const fullApi: ApiFromModules<{
   cleanup: typeof cleanup;
   clock: typeof clock;
   connections: typeof connections;
+  crons: typeof crons;
+  demoPeople: typeof demoPeople;
   events: typeof events;
   followUps: typeof followUps;
   followUpsNode: typeof followUpsNode;

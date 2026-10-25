@@ -2,7 +2,7 @@
 
 import { sharedInterests } from "@/lib/recommend";
 import { useApp } from "@/lib/store";
-import { isStale, minutesAgo } from "@/lib/time";
+import { isStale, minutesAgo, STALE_AFTER_MIN } from "@/lib/time";
 import type { User } from "@/lib/types";
 import { FloorPlan } from "../FloorPlan";
 import { ZoneMark } from "../ZoneIcon";
@@ -133,7 +133,11 @@ function PersonCard({ person }: { person: User }) {
 
       <p className={`mt-auto pt-4 text-xs ${stale ? "font-bold text-busy-ink" : "text-muted"}`}>
         Updated {minutesAgo(person.updatedAt, state.now)}
+        {stale && ", may have moved"}
       </p>
+      {stale && (
+        <p className="mt-0.5 text-[11px] text-muted">Shown when someone hasn&apos;t updated for {STALE_AFTER_MIN}+ min.</p>
+      )}
 
       {/* Speakers take requests from anyone; guests from other guests. */}
       {(person.role === "panel" || me.role === "attendee") && (

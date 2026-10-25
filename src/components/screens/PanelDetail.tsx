@@ -5,7 +5,7 @@ import { sharedInterests } from "@/lib/recommend";
 import { positionInQueue, queueFor, useApp } from "@/lib/store";
 import { FollowUp } from "../FollowUp";
 import { HuddleCard, huddleForRequest } from "../Huddle";
-import { isStale, minutesAgo, timeLeft } from "@/lib/time";
+import { isStale, minutesAgo, STALE_AFTER_MIN, timeLeft } from "@/lib/time";
 import { Avatar, Button, Header, inputClass, PillButton, StatusPill, ZoneBadge } from "../ui";
 
 export function PanelDetail({ panelId }: { panelId: string }) {
@@ -101,6 +101,9 @@ export function PanelDetail({ panelId }: { panelId: string }) {
                   Still here?
                 </PillButton>
               )}
+              <p className="min-w-0 flex-1 text-xs text-muted">
+                No update for {STALE_AFTER_MIN}+ min, so {first} may have moved. This button asks them to confirm.
+              </p>
             </div>
           )}
         </section>

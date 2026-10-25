@@ -4,7 +4,7 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-25 03:40 PT
+마지막 업데이트: 2026-10-25 03:55 PT
 
 ---
 
@@ -222,6 +222,8 @@ src/
 
 **대화를 못 했을 때**: `chatRequests.closedBecause` = `speaker_left`(떠남·Leaving now·Guest로 전환·Huddle이 떠남으로 해산) / `declined`(거절) / `missed`(Didn't show). 모두 `followUps.closeWithoutChat`을 거쳐 Claude 초안이 예약되고, 게스트는 배너("Dana has left. Keep the conversation going on LinkedIn.")와 Requests의 Keep in touch 카드(LinkedIn·메시지·Copy), 패널은 People you missed를 본다.
 
+**15분 규칙 데모(crons.ts → demoPeople.keepTimes, 1분마다)**: 예시 게스트 Logan(`DEMO_ALWAYS_FRESH`)은 매분 `updatedAt`을 지금으로 맞춰 항상 "방금 업데이트", Jimin(`DEMO_ALWAYS_STALE`)은 마지막 업데이트를 40분 이상 전으로 유지해 항상 흐린 카드·"may have moved"·"Still here?"가 나온다. Jimin은 답할 수 없어서 Still here?를 누른 뒤 2분이 지나면 질문이 지워져 다시 누를 수 있다. 카드·Map 카드·프로필에 "Shown when someone hasn't updated for 15+ min." 안내.
+
 **알림**: 앱 화면 안 배너(Toast)만 쓴다. 폰 푸시 알림 없음.
 
 **Huddle 설계**
@@ -290,6 +292,7 @@ src/
 ---
 - [x] 요청 받기를 Requests 탭으로(Now는 요약만), 게스트끼리 1:1 요청, 10분 대화 삭제
 - [x] Explore → People에 Guests 목록(Speakers 아래, 같은 형식)
+- [x] 15분 규칙 데모: Jimin은 항상 15분 넘음(흐림·may have moved·Still here?), Logan은 항상 방금 업데이트. 옆에 15분 안내 문구
 
 ## 6. 다른 컴퓨터에서 처음 시작하기
 
@@ -502,3 +505,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/25 02:50 Explore 핵심 먼저(Speakers → Your people → AI matches), 패널 상세 요청 박스 위로·떠난 패널 페이지에 후속 메시지, 입력 안내 "Spot uses this to match you and form huddles.", 로딩 문구
 - 10/25 03:30 나에게 온 요청은 Requests 탭 "Requests to you"로(Now는 상태·떠나는 시간·요약), 게스트끼리 1:1 요청(Huddle은 Speaker만), 10분 대화(제안·타이머) 삭제·AI 매치 카드는 Request to chat으로
 - 10/25 03:40 Explore → People의 Speakers 아래에 Guests 목록(같은 필터·카드, 누르면 프로필 → Request to chat)
+- 10/25 03:55 15분 규칙 데모: Jimin 항상 15분 넘음·Logan 항상 방금(1분 cron demoPeople.keepTimes), may have moved·Still here? 옆에 15분 안내 문구. 저장소 Public 전환 후 첫 자동 배포

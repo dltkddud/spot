@@ -2,7 +2,7 @@
 
 import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { queueFor, useApp, type Screen } from "@/lib/store";
-import { isStale, minutesAgo, timeLeft, timeLeftLabel } from "@/lib/time";
+import { isStale, minutesAgo, STALE_AFTER_MIN, timeLeft, timeLeftLabel } from "@/lib/time";
 import type { Status, User, Zone } from "@/lib/types";
 import { PIN_PATH, ZoneMark } from "./ZoneIcon";
 
@@ -322,9 +322,14 @@ export function PanelCard({ panel, onOpen }: { panel: User; onOpen: () => void }
           Look for <span className="font-semibold text-ink">{panel.outfit}</span>
         </span>
         {stale && (
-          <span className="mt-1 block text-xs font-semibold text-muted">
-            Last update {minutesAgo(panel.updatedAt, state.now)}, may have moved
-          </span>
+          <>
+            <span className="mt-1 block text-xs font-semibold text-muted">
+              Last update {minutesAgo(panel.updatedAt, state.now)}, may have moved
+            </span>
+            <span className="mt-0.5 block text-[11px] text-muted">
+              Shown when someone hasn&apos;t updated for {STALE_AFTER_MIN}+ min.
+            </span>
+          </>
         )}
       </span>
     </button>

@@ -85,6 +85,12 @@ const ROBOTICS_ZONES: MockZone[] = [
   { id: "rx-alley", code: "D", name: "Startup Alley", landmark: "Narrow aisle along the east wall", icon: "hallway" },
 ];
 
+// For the demo of the 15-minute rule: Logan always looks just updated (a cron
+// refreshes him every minute), Jimin never updates, so he shows "may have moved"
+// and "Still here?".
+export const DEMO_ALWAYS_FRESH = ["a-logan"];
+export const DEMO_ALWAYS_STALE = ["a-jimin"];
+
 // The only demo people: two guests at Cal Hacks. Everyone else signs up for real.
 export function makeUsers(now: number): MockPerson[] {
   return [
@@ -100,7 +106,7 @@ export function makeUsers(now: number): MockPerson[] {
       status: "available",
       visible: true,
       requestsPaused: false,
-      updatedAt: now - 3 * MIN,
+      updatedAt: now - 40 * MIN,
     },
     {
       id: "a-logan",
