@@ -60,8 +60,39 @@ export const update = mutation({
       ...(role !== undefined && { role }),
       ...(talkTitle !== undefined && { talkTitle: talkTitle.trim() || undefined }),
       ...(stopsSpeaking && { status: "available" as const, leavingAt: undefined, requestsPaused: false }),
+      // Any update answers a pending "Still here?".
+      stillHereAskedAt: undefined,
       updatedAt: Date.now(),
     });
+    return null;
+  },
+});
+
+// "Still here?": someone looking at a zone that hasn't been updated in a while
+// asks its owner to confirm. The owner sees a prompt until they answer.
+export const askStillHere = mutation({
+  args: { id: v.id("users"), askerId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { id, askerId }) => {
+    if (id === askerId) throw new ConvexError("You can't ask yourself.");
+    const [user, asker] = await Promise.all([ctx.db.get("users", id), ctx.db.get("users", askerId)]);
+    if (!user || !asker || user.eventId !== asker.eventId) throw new ConvexError("User not found.");
+    if (!user.zoneId) throw new ConvexError("They aren't sharing a zone right now.");
+    // Already asked and not answered yet: one prompt is enough.
+    if (user.stillHereAskedAt !== undefined) return null;
+    await ctx.db.patch("users", id, { stillHereAskedAt: Date.now() });
+    return null;
+  },
+});
+
+// The owner taps "Still here": same zone, fresh time.
+export const confirmStillHere = mutation({
+  args: { id: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { id }) => {
+    const user = await ctx.db.get("users", id);
+    if (!user) throw new ConvexError("User not found.");
+    await ctx.db.patch("users", id, { stillHereAskedAt: undefined, updatedAt: Date.now() });
     return null;
   },
 });
@@ -84,10 +115,10 @@ export const setStatus = mutation({
         throw new ConvexError("Pick when you're leaving.");
       }
       const leavingAt = now + leavingInMin * MIN;
-      await ctx.db.patch("users", id, { status, leavingAt, updatedAt: now });
+      await ctx.db.patch("users", id, { status, leavingAt, stillHereAskedAt: undefined, updatedAt: now });
       await scheduleLeaving(ctx, id, leavingAt);
     } else {
-      await ctx.db.patch("users", id, { status, leavingAt: undefined, updatedAt: now });
+      await ctx.db.patch("users", id, { status, leavingAt: undefined, stillHereAskedAt: undefined, updatedAt: now });
     }
     return null;
   },
@@ -108,6 +139,7 @@ const personValidator = v.object({
   shareWith: v.optional(shareWithValidator),
   requestsPaused: v.boolean(),
   updatedAt: v.number(),
+  stillHereAskedAt: v.optional(v.number()),
   seedKey: v.optional(v.string()),
   // From the profile.
   name: v.string(),
@@ -164,6 +196,7 @@ export const listByEvent = query({
         shareWith: u.shareWith,
         requestsPaused: u.requestsPaused,
         updatedAt: u.updatedAt,
+        stillHereAskedAt: u.stillHereAskedAt,
         seedKey: u.seedKey,
         name: profile.name,
         headline: profile.headline,

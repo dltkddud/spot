@@ -65,6 +65,8 @@ export default defineSchema({
     shareWith: v.optional(v.union(v.literal("everyone"), v.literal("connections"), v.literal("nobody"))),
     requestsPaused: v.boolean(),
     updatedAt: v.number(),
+    // Someone tapped "Still here?" on my stale zone. Cleared once I confirm or update anything.
+    stillHereAskedAt: v.optional(v.number()),
     // Demo people created by seed keep their mockData id here (e.g. "p-dana").
     seedKey: v.optional(v.string()),
 

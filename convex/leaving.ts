@@ -67,6 +67,7 @@ export const leave = internalMutation({
       visible: false,
       shareWith: "nobody",
       zoneId: undefined,
+      stillHereAskedAt: undefined,
       updatedAt: Date.now(),
     });
     return null;

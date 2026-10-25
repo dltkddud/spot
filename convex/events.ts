@@ -101,6 +101,7 @@ export const endEvent = internalMutation({
         zoneId: undefined,
         status: "available",
         leavingAt: undefined,
+        stillHereAskedAt: undefined,
         updatedAt: now,
       });
     }
