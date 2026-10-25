@@ -9,8 +9,10 @@
  */
 
 import type * as activity from "../activity.js";
+import type * as admin from "../admin.js";
 import type * as aiCheck from "../aiCheck.js";
 import type * as chatRequests from "../chatRequests.js";
+import type * as cleanup from "../cleanup.js";
 import type * as connections from "../connections.js";
 import type * as events from "../events.js";
 import type * as followUps from "../followUps.js";
@@ -31,8 +33,10 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
+  admin: typeof admin;
   aiCheck: typeof aiCheck;
   chatRequests: typeof chatRequests;
+  cleanup: typeof cleanup;
   connections: typeof connections;
   events: typeof events;
   followUps: typeof followUps;

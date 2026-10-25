@@ -65,17 +65,6 @@ async function formIfReady(ctx: MutationCtx, huddleId: Id<"huddles">) {
   await record(ctx, huddle.eventId, "huddle_formed", members[0].userId, huddle.panelId);
 }
 
-// Demo people can't tap buttons, so they say yes whenever a real person is in the huddle.
-async function demoSaysYes(ctx: MutationCtx, huddleId: Id<"huddles">) {
-  const members = await membersOf(ctx, huddleId);
-  const users = await Promise.all(members.map((m) => ctx.db.get("users", m.userId)));
-  if (!users.some((u) => u && !u.seedKey)) return;
-  for (const [i, m] of members.entries()) {
-    if (users[i]?.seedKey && m.response === "pending") await ctx.db.patch("huddleMembers", m._id, { response: "yes" });
-  }
-  await formIfReady(ctx, huddleId);
-}
-
 async function interestsOf(ctx: QueryCtx, user: Doc<"users">) {
   const profile = user.profileId ? await ctx.db.get("profiles", user.profileId) : null;
   return { interests: profile?.interests ?? [], open: profile?.openToHuddles !== false };
@@ -152,7 +141,6 @@ export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
     }
     if (!added) continue;
     await ctx.db.patch("huddles", huddle._id, { sharedInterests: shared });
-    await demoSaysYes(ctx, huddle._id);
   }
 
   while (pool.length >= 2) {
@@ -175,7 +163,6 @@ export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
     });
     for (const c of group) await addMember(ctx, huddleId, c);
     await record(ctx, panel.eventId, "huddle_proposed", first.user._id, panelId);
-    await demoSaysYes(ctx, huddleId);
   }
 }
 

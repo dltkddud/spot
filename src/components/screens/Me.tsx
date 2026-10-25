@@ -60,13 +60,7 @@ export function Me() {
               </span>
             ))}
           </div>
-          <Button
-            variant="secondary"
-            icon="edit"
-            block
-            className="mt-4"
-            onClick={() => navigate({ name: "editProfile" })}
-          >
+          <Button variant="secondary" icon="edit" block className="mt-4" onClick={() => navigate({ name: "editProfile" })}>
             Edit profile
           </Button>
         </section>

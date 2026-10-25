@@ -93,7 +93,7 @@ type LocalState = {
 };
 
 type State = LocalState & {
-  // My participation at this event.
+  // My participation at this event. currentUserId is the same (kept for screens).
   myUserId: string | null;
   profile: Profile | null;
   events: EventInfo[];
@@ -373,6 +373,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [partsRaw],
   );
   const myUserId = participations.find((p) => p.eventId === eventId)?.userId ?? null;
+  const currentUserId = myUserId;
 
   const current = useLatest(useQuery(api.events.get, eventId ? { eventId } : "skip"));
   const rawUsers = useLatest(

@@ -118,7 +118,9 @@ export function ExplorePeople() {
         ))}
         {shown.length === 0 && (
           <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">
-            No one matches this filter right now. Try All.
+            {panels.length === 0
+              ? `No speakers are sharing their zone at ${state.event.name} yet. They'll show up here as soon as they join.`
+              : "No one matches this filter right now. Try All."}
           </p>
         )}
       </div>

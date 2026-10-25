@@ -57,7 +57,7 @@ export default defineSchema({
     connectCode: v.optional(v.string()),
     // false = never suggest huddles to me. Missing means yes.
     openToHuddles: v.optional(v.boolean()),
-    // Demo people created by seed keep their mockData id here (e.g. "p-dana").
+    // Old demo people only (e.g. "p-dana"); the remove-demo-people migration deletes them.
     seedKey: v.optional(v.string()),
     createdAt: v.number(),
   })
@@ -88,8 +88,16 @@ export default defineSchema({
     updatedAt: v.number(),
     // Someone tapped "Still here?" on my stale zone. Cleared once I confirm or update anything.
     stillHereAskedAt: v.optional(v.number()),
-    // Demo people created by seed keep their mockData id here (e.g. "p-dana").
+    // Old demo people only (e.g. "p-dana"); the remove-demo-people migration deletes them.
     seedKey: v.optional(v.string()),
+    // Set when a speaker's leaving time came (or they tapped Leaving now): where
+    // they were and who saw them, so admin.resetActivity can put them back.
+    leftFrom: v.optional(
+      v.object({
+        zoneId: v.optional(v.id("zones")),
+        shareWith: v.union(v.literal("everyone"), v.literal("connections"), v.literal("nobody")),
+      }),
+    ),
     // Optional, for AI matching: "What I want to learn today" / "What I can share". Max 140 chars.
     learnToday: v.optional(v.string()),
     canShare: v.optional(v.string()),

@@ -136,7 +136,10 @@ convex/
   followUpsNode.ts  "use node" action draft: claude-haiku-5-5로 후속 메시지 초안 (키 없거나 실패면 기본 문장)
   leaving.ts        scheduleLeaving, warn(10분 전), leave(떠나는 시각), closeLine(줄 닫기: 떠날 때·Speaker→Guest,
                     missed + closedBecause 표시 + 초안 예약)
-  seed.ts           ensure(마이그레이션 + 행사 채우기·맞추기). wipe-people-v1이 사람 데이터(AI 매칭 matches·matchSets 포함)를 한 번 전부 지움
+  seed.ts           ensure(마이그레이션 + 행사·구역 맞추기 + 예시 게스트 추가). remove-demo-people-v1(예전 예시 사람 삭제) 다음에
+                    wipe-people-v1이 사람 데이터(실제 가입자, AI 매칭 matches·matchSets 포함)를 한 번 전부 지움
+  cleanup.ts        참가·프로필과 거기 딸린 요청·Huddle·매칭·활동 지우기 (seed, admin이 사용)
+  admin.ts          터미널 전용 internal: listParticipants, removeParticipants(테스트 가입자 지우기), resetActivity(데모 전 요청·Huddle·매칭·떠남 초기화)
   _generated/       자동 생성. 직접 고치지 않음. GitHub에 같이 올림
 prompts/
   recommend.md      Stage 4 추천 프롬프트 초안 (입력·출력 JSON 형식 포함)
@@ -396,6 +399,7 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - **사람 데이터 초기화(wipe-people-v1)**: 이 버전을 배포한 뒤 앱을 처음 여는 순간 Development·Production 각각에서 프로필·참가·요청·Huddle·연결·활동 기록이 **한 번 전부 지워진다**(행사·구역은 유지). 그 전에 가입한 팀원 계정도 사라지니 배포 후 다시 가입. 지워진 계정을 기억하던 브라우저는 새로고침하면 Welcome으로 돌아간다.
 - **예시 사람은 Jimin Kim·Logan Kim 두 게스트뿐**(Cal Hacks, Atrium·Theater). AI 매칭용 learnToday·canShare는 `mockData.ts`의 `MATCH_INPUTS`에 이 둘만 있다. Huddle에서는 버튼을 누를 수 없어 자동으로 Yes 처리된다. 패널·요청 예시는 없으니 데모는 실제로 가입한 사람끼리 한다(예: 한 사람은 Speaker, 한 사람은 Guest).
 - **로그인은 LinkedIn 주소만으로 된다**(비밀번호 없음). 해커톤 범위의 단순화라, 남의 LinkedIn 주소를 알면 그 사람으로 들어갈 수 있다. 심사 질문이 나오면 "실서비스에서는 LinkedIn OAuth로 바꿀 부분"이라고 답한다.
+- **데모 전 초기화**는 화면 대신 터미널에서: `npx convex run admin:resetActivity '{"eventKey":"calhacks-13"}' --prod` (사람·프로필은 두고 요청·Huddle·매칭·떠남만 초기화). 테스트 가입자 지우기: `admin:listParticipants`로 id 확인 → `admin:removeParticipants`.
 - **Demo controls(View as, 데모 버튼, Reset demo)는 없앴다.** 두 사람 화면을 같이 보려면 일반 창 + 시크릿 창(또는 폰 두 대)으로 각각 로그인한다.
 - **Claude 키**: `ANTHROPIC_API_KEY`는 Development와 Production Convex 환경 변수에 모두 들어가 있다(코드·파일에는 없음). 키가 없거나 호출이 실패하면 후속 메시지는 기본 문장(`templateMessage`)으로 나오고, 카드에 "Drafted by Claude" 대신 "Edit it before you send."만 보인다.
 - **후속 메시지는 패널이 떠났을 때만**: "Didn't show"로 놓친 경우(게스트가 안 온 경우)에는 만들지 않는다. 구분은 `chatRequests.closedBecause === "speaker_left"`.
@@ -451,4 +455,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/24 07:43 팀 피드백 3: profiles 분리·여러 행사·행사별 역할·Edit profile·LinkedIn, 마이그레이션 profiles-and-events-v1, 예시 행사 2개
 - 10/24 09:59 팀 피드백 4: 떠난 패널의 LinkedIn + Claude(haiku 5.5) 후속 메시지 초안·Copy, Speaker→Guest 때도 같은 흐름, 데모 "leaves now" 버튼
 - 10/24 19:51 PanelDetail의 "may have moved" 문구를 "Still here?" 버튼으로 교체, 상대에게 Still here / I moved 알림, 답하면 물어본 사람에게 배너 (users.stillHereAskedAt 추가)
-- 10/25 02:20 실데모 준비: 가상 인물 전부 삭제(wipe-people-v1, 예시 게스트 Jimin Kim·Logan Kim만), LinkedIn 필수·중복 불가·LinkedIn으로 Log in, Me의 Demo controls 삭제·Log out 추가, 모든 사용자 Edit profile, 떠나는 시간 10/30/Other(시각 입력)·남은 시간 오차 수정. 로컬 Convex로 두 브라우저 실시간 요청·수락 확인. main의 AI 매칭(WIP) 위에 merge, Demo controls의 Match 데모 버튼도 같이 뺌(서버 함수 demoTheySayYes·demoIncoming은 남아 있지만 화면에서 안 씀)
+- 10/25 02:20 실데모 준비: 가상 인물 전부 삭제(wipe-people-v1, 예시 게스트 Jimin Kim·Logan Kim만), LinkedIn 필수·중복 불가·LinkedIn으로 Log in, Me의 Demo controls 삭제·Log out 추가, 모든 사용자 Edit profile, 떠나는 시간 10/30/Other(시각 입력)·남은 시간 오차 수정. 로컬 Convex로 두 브라우저 실시간 요청·수락 확인. main의 AI 매칭(WIP)과 dltkddud의 remove-demo-people-v1·admin 명령 위에 merge, Demo controls의 Match 데모 버튼도 같이 뺌(서버 함수 demoTheySayYes·demoIncoming은 남아 있지만 화면에서 안 씀)

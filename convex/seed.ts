@@ -3,9 +3,8 @@ import { mutation, type MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { CAL_HACKS_KEY, EVENTS, MATCH_INPUTS, type MockEvent, type MockPerson } from "../src/lib/mockData";
 import { scheduleEventEnd } from "./events";
-import { scheduleLeaving } from "./leaving";
-import { proposeFor } from "./huddles";
 import { newConnectCode } from "./connections";
+import { deleteParticipations, deleteProfiles } from "./cleanup";
 import { profileFromLegacy } from "./profiles";
 
 // ---------------------------------------------------------------------------
@@ -67,9 +66,25 @@ async function profilesAndEvents(ctx: MutationCtx) {
   }
 }
 
+// The demo people (Dana, Lena, ...) are gone: demos use real accounts now.
+// Removes every participation and profile seed made (they have a seedKey), and
+// the requests, huddles, 10-minute chats, saved matches, connections and
+// activity they were part of. Real sign-ups never have a seedKey.
+async function removeDemoPeople(ctx: MutationCtx) {
+  const userIds = new Set<Id<"users">>();
+  const profileIds = new Set<Id<"profiles">>();
+  for await (const p of ctx.db.query("profiles")) if (p.seedKey) profileIds.add(p._id);
+  for await (const u of ctx.db.query("users")) {
+    if (u.seedKey || (u.profileId && profileIds.has(u.profileId))) userIds.add(u._id);
+  }
+  await deleteParticipations(ctx, userIds);
+  await deleteProfiles(ctx, profileIds);
+}
+
 // Starts over with real people only: every profile, participation, request,
-// huddle, AI match, connection and activity row goes. Events and zones stay. The demo
-// guests in mockData (Jimin, Logan) are put back right after by ensureEvent.
+// huddle, AI match, connection and activity row goes, real sign-ups included.
+// Events and zones stay. The demo guests in mockData (Jimin, Logan) are put
+// back right after by ensureEvent.
 async function wipePeople(ctx: MutationCtx) {
   const tables = [
     "matches",
@@ -89,7 +104,7 @@ async function wipePeople(ctx: MutationCtx) {
 }
 
 // ---------------------------------------------------------------------------
-// Demo data from mockData.EVENTS.
+// Events, zones and demo guests from mockData.EVENTS.
 
 // Makes an event's zones match mockData, matched by code so that renaming a
 // zone never breaks where people already said they are.
@@ -115,48 +130,32 @@ async function syncZones(ctx: MutationCtx, eventId: Id<"events">, mock: MockEven
   return zoneIds;
 }
 
-// Puts every demo person where mockData starts them, giving each a profile
-// (found again by seed key) and a place at this event.
-// Returns seed key -> Convex user id at this event.
-async function placeDemoPeople(
-  ctx: MutationCtx,
-  eventId: Id<"events">,
-  zoneIds: Record<string, Id<"zones">>,
-  people: MockPerson[],
-  now: number,
-) {
-  const userIds: Record<string, Id<"users">> = {};
+// Adds demo people who aren't there yet (found by seed key), each with a
+// profile and a place at this event. Ones already there are left where they are.
+async function addDemoPeople(ctx: MutationCtx, eventId: Id<"events">, zoneIds: Record<string, Id<"zones">>, people: MockPerson[]) {
+  const now = Date.now();
   for (const p of people) {
-    const profileFields = {
-      name: p.name,
-      headline: p.headline,
-      interests: p.interests,
-      linkedinUrl: p.linkedinUrl,
-      contactUrl: p.contactUrl,
-    };
     const profile = await ctx.db
       .query("profiles")
       .withIndex("by_seed_key", (q) => q.eq("seedKey", p.id))
       .first();
-    const profileId =
-      profile?._id ??
-      (await ctx.db.insert("profiles", {
-        ...profileFields,
-        connectCode: await newConnectCode(ctx),
-        seedKey: p.id,
-        createdAt: now,
-      }));
-    if (profile) await ctx.db.patch("profiles", profile._id, profileFields);
-
+    if (profile) continue;
+    const profileId = await ctx.db.insert("profiles", {
+      name: p.name,
+      headline: p.headline,
+      interests: p.interests,
+      linkedinUrl: p.linkedinUrl,
+      connectCode: await newConnectCode(ctx),
+      seedKey: p.id,
+      createdAt: now,
+    });
     const doc: Omit<Doc<"users">, "_id" | "_creationTime"> = {
       eventId,
       profileId,
       role: p.role,
-      talkTitle: p.talkTitle,
       outfit: p.outfit,
       zoneId: p.zoneId ? zoneIds[p.zoneId] : undefined,
       status: p.status,
-      leavingAt: p.leavingAt,
       visible: p.visible,
       shareWith: p.shareWith,
       requestsPaused: p.requestsPaused,
@@ -165,107 +164,14 @@ async function placeDemoPeople(
       learnToday: MATCH_INPUTS[p.id]?.learnToday,
       canShare: MATCH_INPUTS[p.id]?.canShare,
     };
-    const row = await ctx.db
-      .query("users")
-      .withIndex("by_profile_and_event", (q) => q.eq("profileId", profileId).eq("eventId", eventId))
-      .first();
-    if (row) await ctx.db.replace("users", row._id, doc);
-    userIds[p.id] = row?._id ?? (await ctx.db.insert("users", doc));
-    if (p.leavingAt) await scheduleLeaving(ctx, userIds[p.id], p.leavingAt);
-  }
-  return userIds;
-}
-
-// Keeps demo people's profiles (name, one line, interests, links) and what
-// they want to learn and can share in line with mockData, without moving them
-// around the event. Returns the ones not there yet.
-async function syncDemoProfiles(ctx: MutationCtx, eventId: Id<"events">, mock: MockEvent, now: number) {
-  const missing: MockPerson[] = [];
-  for (const p of mock.people(now)) {
-    const profile = await ctx.db
-      .query("profiles")
-      .withIndex("by_seed_key", (q) => q.eq("seedKey", p.id))
-      .first();
-    if (!profile) {
-      missing.push(p);
-      continue;
-    }
-    const here = await ctx.db
-      .query("users")
-      .withIndex("by_profile_and_event", (q) => q.eq("profileId", profile._id).eq("eventId", eventId))
-      .first();
-    const { learnToday, canShare } = MATCH_INPUTS[p.id] ?? {};
-    if (here && (here.learnToday !== learnToday || here.canShare !== canShare)) {
-      await ctx.db.patch("users", here._id, { learnToday, canShare });
-    }
-    const same =
-      profile.name === p.name &&
-      profile.headline === p.headline &&
-      profile.interests.join() === p.interests.join() &&
-      profile.linkedinUrl === p.linkedinUrl &&
-      profile.contactUrl === p.contactUrl;
-    if (!same) {
-      await ctx.db.patch("profiles", profile._id, {
-        name: p.name,
-        headline: p.headline,
-        interests: p.interests,
-        linkedinUrl: p.linkedinUrl,
-        contactUrl: p.contactUrl,
-      });
-    }
-  }
-  return missing;
-}
-
-async function insertDemoRequests(
-  ctx: MutationCtx,
-  eventId: Id<"events">,
-  userIds: Record<string, Id<"users">>,
-  mock: MockEvent,
-  now: number,
-) {
-  for (const { panelId, attendeeId, note, status, createdAt } of mock.requests(now)) {
-    if (!userIds[panelId] || !userIds[attendeeId]) continue;
-    await ctx.db.insert("chatRequests", {
-      eventId,
-      note,
-      status,
-      createdAt,
-      panelId: userIds[panelId],
-      attendeeId: userIds[attendeeId],
-    });
+    await ctx.db.insert("users", doc);
   }
 }
 
-// Suggests huddles in the demo speakers' lines. In each one, everyone but the
-// person who has waited longest has already said yes, so viewing as that
-// person (e.g. Lena in Dana's line) shows a suggestion one tap from ready.
-async function primeDemoHuddles(ctx: MutationCtx, userIds: Record<string, Id<"users">>, mock: MockEvent, now: number) {
-  for (const p of mock.people(now)) {
-    if (p.role !== "panel" || !userIds[p.id]) continue;
-    const panelId = userIds[p.id];
-    await proposeFor(ctx, panelId);
-    const proposed = await ctx.db
-      .query("huddles")
-      .withIndex("by_panel_and_status", (q) => q.eq("panelId", panelId).eq("status", "proposed"))
-      .take(20);
-    for (const h of proposed) {
-      const members = await ctx.db
-        .query("huddleMembers")
-        .withIndex("by_huddle", (q) => q.eq("huddleId", h._id))
-        .take(5);
-      const requests = await Promise.all(members.map((m) => ctx.db.get("chatRequests", m.requestId)));
-      const firstAt = Math.min(...requests.map((r) => r?.createdAt ?? Infinity));
-      for (const [i, m] of members.entries()) {
-        if (requests[i]?.createdAt !== firstAt) await ctx.db.patch("huddleMembers", m._id, { response: "yes" });
-      }
-    }
-  }
-}
-
-// Creates a mockData event with its zones, people, requests and huddles, or,
-// if it already exists, keeps its details, times and zones in line with mockData.
-async function ensureEvent(ctx: MutationCtx, mock: MockEvent, now: number) {
+// Creates a mockData event with its zones or, if it already exists, keeps its
+// details, times and zones in line with mockData. People are real sign-ups,
+// plus the event's demo guests.
+async function ensureEvent(ctx: MutationCtx, mock: MockEvent) {
   const details = {
     key: mock.key,
     name: mock.name,
@@ -281,17 +187,10 @@ async function ensureEvent(ctx: MutationCtx, mock: MockEvent, now: number) {
   if (existing) {
     const changed = (Object.keys(details) as (keyof typeof details)[]).some((k) => existing[k] !== details[k]);
     if (changed) await ctx.db.patch("events", existing._id, details);
-    const zoneIds = await syncZones(ctx, existing._id, mock);
-    const missing = await syncDemoProfiles(ctx, existing._id, mock, now);
-    if (missing.length > 0) await placeDemoPeople(ctx, existing._id, zoneIds, missing, now);
-    await scheduleEventEnd(ctx, existing._id);
-    return;
   }
-  const eventId = await ctx.db.insert("events", details);
+  const eventId = existing?._id ?? (await ctx.db.insert("events", details));
   const zoneIds = await syncZones(ctx, eventId, mock);
-  const userIds = await placeDemoPeople(ctx, eventId, zoneIds, mock.people(now), now);
-  await insertDemoRequests(ctx, eventId, userIds, mock, now);
-  await primeDemoHuddles(ctx, userIds, mock, now);
+  if (mock.people) await addDemoPeople(ctx, eventId, zoneIds, mock.people(Date.now()));
   await scheduleEventEnd(ctx, eventId);
 }
 
@@ -303,9 +202,9 @@ export const ensure = mutation({
   handler: async (ctx) => {
     await runOnce(ctx, "remove-still-here-and-stay", () => removeStillHereAndStay(ctx));
     await runOnce(ctx, "profiles-and-events-v1", () => profilesAndEvents(ctx));
+    await runOnce(ctx, "remove-demo-people-v1", () => removeDemoPeople(ctx));
     await runOnce(ctx, "wipe-people-v1", () => wipePeople(ctx));
-    const now = Date.now();
-    for (const mock of EVENTS) await ensureEvent(ctx, mock, now);
+    for (const mock of EVENTS) await ensureEvent(ctx, mock);
     return null;
   },
 });

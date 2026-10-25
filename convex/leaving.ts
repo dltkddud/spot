@@ -5,6 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { LEAVE_WARNING_MIN } from "../src/lib/time";
 import { dissolveAllFor } from "./huddles";
 import { cancelMatchesFor } from "./matches";
+import { shareWithOf } from "./users";
 
 const MIN = 60_000;
 
@@ -63,10 +64,12 @@ export const leave = internalMutation({
   args: { userId: v.id("users"), leavingAt: v.number() },
   returns: v.null(),
   handler: async (ctx, { userId, leavingAt }) => {
-    if (!(await stillLeavingAt(ctx, userId, leavingAt))) return null;
+    const user = await stillLeavingAt(ctx, userId, leavingAt);
+    if (!user) return null;
     await closeLine(ctx, userId);
     await cancelMatchesFor(ctx, userId);
     await ctx.db.patch("users", userId, {
+      leftFrom: { zoneId: user.zoneId, shareWith: shareWithOf(user) },
       visible: false,
       shareWith: "nobody",
       zoneId: undefined,
@@ -76,3 +79,4 @@ export const leave = internalMutation({
     return null;
   },
 });
+

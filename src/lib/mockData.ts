@@ -1,33 +1,29 @@
-import type { ChatRequest, Role, ShareWith, Status, Zone } from "./types";
+import type { Role, ShareWith, Status, Zone } from "./types";
 import { PALACE_FLOOR_PLAN, type ZoneIcon } from "./floorplan";
 
 const MIN = 60_000;
 
+export type MockZone = Zone & { icon: ZoneIcon };
+
 // A demo person: their profile and their part in one event, as one record.
 export type MockPerson = {
-  id: string; // seed key, e.g. "p-dana"
+  id: string; // seed key, e.g. "a-jimin"
   name: string;
   role: Role;
   headline: string;
-  talkTitle?: string;
   interests: string[];
   outfit: string;
-  linkedinUrl?: string;
-  contactUrl?: string;
+  linkedinUrl: string;
   zoneId?: string;
   status: Status;
-  leavingAt?: number;
   visible: boolean;
   shareWith?: ShareWith;
   requestsPaused: boolean;
   updatedAt: number;
-  // What they want to learn and can share today (see MATCH_INPUTS).
-  learnToday?: string;
-  canShare?: string;
 };
 
-export type MockZone = Zone & { icon: ZoneIcon };
-
+// An event seed.ensure creates (or keeps in line): its details and zones.
+// People come from real sign-ups, plus the demo guests in people (if any).
 export type MockEvent = {
   key: string;
   name: string;
@@ -37,8 +33,7 @@ export type MockEvent = {
   // Set when the venue has a floor plan in public/ (see floorplan.ts).
   floorPlan?: string;
   zones: MockZone[];
-  people: (now: number) => MockPerson[];
-  requests: (now: number) => ChatRequest[];
+  people?: (now: number) => MockPerson[];
 };
 
 export const INTEREST_OPTIONS = [
@@ -74,6 +69,22 @@ export const EVENT_ENDS_AT = Date.UTC(2026, 9, 25, 23, 0, 0);
 
 export const CAL_HACKS_KEY = "calhacks-13";
 
+// Two smaller events after Cal Hacks, so the Events list has somewhere else to go.
+// Times are in San Francisco: PDT (UTC-7) until Nov 1, PST (UTC-8) after.
+const FOUNDERS_ZONES: MockZone[] = [
+  { id: "fc-nave", code: "A", name: "Grand Nave", landmark: "Long skylit hall down the middle", icon: "columns" },
+  { id: "fc-coffee", code: "B", name: "Coffee Counter", landmark: "By the espresso bar, near the clock tower doors", icon: "coffee" },
+  { id: "fc-patio", code: "C", name: "Bay Patio", landmark: "Outside facing the water, by the benches", icon: "patio" },
+  { id: "fc-room", code: "D", name: "Meeting Room", landmark: "Second floor, up the north stairs", icon: "doors2" },
+];
+
+const ROBOTICS_ZONES: MockZone[] = [
+  { id: "rx-floor", code: "A", name: "Expo Floor", landmark: "Rows of booths past registration", icon: "booths" },
+  { id: "rx-stage", code: "B", name: "Demo Stage", landmark: "Big screen at the far end of the hall", icon: "theater" },
+  { id: "rx-arena", code: "C", name: "Robot Arena", landmark: "Netted ring in the middle of the floor", icon: "robot" },
+  { id: "rx-alley", code: "D", name: "Startup Alley", landmark: "Narrow aisle along the east wall", icon: "hallway" },
+];
+
 // The only demo people: two guests at Cal Hacks. Everyone else signs up for real.
 export function makeUsers(now: number): MockPerson[] {
   return [
@@ -108,21 +119,17 @@ export function makeUsers(now: number): MockPerson[] {
   ];
 }
 
-// Two smaller events after Cal Hacks, so the Events list has somewhere else to go.
-// Times are in San Francisco: PDT (UTC-7) until Nov 1, PST (UTC-8) after.
-const FOUNDERS_ZONES: MockZone[] = [
-  { id: "fc-nave", code: "A", name: "Grand Nave", landmark: "Long skylit hall down the middle", icon: "columns" },
-  { id: "fc-coffee", code: "B", name: "Coffee Counter", landmark: "By the espresso bar, near the clock tower doors", icon: "coffee" },
-  { id: "fc-patio", code: "C", name: "Bay Patio", landmark: "Outside facing the water, by the benches", icon: "patio" },
-  { id: "fc-room", code: "D", name: "Meeting Room", landmark: "Second floor, up the north stairs", icon: "doors2" },
-];
-
-const ROBOTICS_ZONES: MockZone[] = [
-  { id: "rx-floor", code: "A", name: "Expo Floor", landmark: "Rows of booths past registration", icon: "booths" },
-  { id: "rx-stage", code: "B", name: "Demo Stage", landmark: "Big screen at the far end of the hall", icon: "theater" },
-  { id: "rx-arena", code: "C", name: "Robot Arena", landmark: "Netted ring in the middle of the floor", icon: "robot" },
-  { id: "rx-alley", code: "D", name: "Startup Alley", landmark: "Narrow aisle along the east wall", icon: "hallway" },
-];
+// What demo people want to learn and can share today, by seed key (AI matching).
+export const MATCH_INPUTS: Record<string, { learnToday?: string; canShare?: string }> = {
+  "a-jimin": {
+    learnToday: "How to get feedback on an agent project from real users",
+    canShare: "What I learned running a campus AI study group",
+  },
+  "a-logan": {
+    learnToday: "Which hardware to start with for a smart glasses prototype",
+    canShare: "Quick Figma prototyping tips for wearable screens",
+  },
+};
 
 export const EVENTS: MockEvent[] = [
   {
@@ -134,7 +141,6 @@ export const EVENTS: MockEvent[] = [
     floorPlan: PALACE_FLOOR_PLAN,
     zones: ZONES,
     people: makeUsers,
-    requests: () => [],
   },
   {
     key: "founders-coffee-sf",
@@ -143,8 +149,6 @@ export const EVENTS: MockEvent[] = [
     startsAt: Date.UTC(2026, 9, 29, 15, 0, 0), // Thu Oct 29, 8:00 AM
     endsAt: Date.UTC(2026, 9, 29, 18, 0, 0), // 11:00 AM
     zones: FOUNDERS_ZONES,
-    people: () => [],
-    requests: () => [],
   },
   {
     key: "bay-area-robotics-expo",
@@ -153,19 +157,5 @@ export const EVENTS: MockEvent[] = [
     startsAt: Date.UTC(2026, 10, 7, 18, 0, 0), // Sat Nov 7, 10:00 AM
     endsAt: Date.UTC(2026, 10, 8, 1, 0, 0), // 5:00 PM
     zones: ROBOTICS_ZONES,
-    people: () => [],
-    requests: () => [],
   },
 ];
-
-// What demo people want to learn and can share today, by seed key.
-export const MATCH_INPUTS: Record<string, { learnToday?: string; canShare?: string }> = {
-  "a-jimin": {
-    learnToday: "How to get feedback on an agent project from real users",
-    canShare: "What I learned running a campus AI study group",
-  },
-  "a-logan": {
-    learnToday: "Which hardware to start with for a smart glasses prototype",
-    canShare: "Quick Figma prototyping tips for wearable screens",
-  },
-};
