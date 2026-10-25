@@ -129,8 +129,9 @@ export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
 // The fallback when Claude isn't available: fills suggestions the speaker
 // hasn't sent yet first (up to 3 people), then pairs the earliest waiting people with whoever shares the
 // most interests. The same two people are never suggested twice for the same
-// speaker, and people who turned huddles off are skipped.
-export async function proposeByInterests(ctx: MutationCtx, panelId: Id<"users">) {
+// speaker, and people who turned huddles off are skipped. minShared: how many
+// interests two people need in common to be paired.
+export async function proposeByInterests(ctx: MutationCtx, panelId: Id<"users">, minShared = 1) {
   const panel = await ctx.db.get("users", panelId);
   if (!panel || !panel.visible) return;
   const { seen, busy, proposed } = await lineState(ctx, panelId);
@@ -138,7 +139,7 @@ export async function proposeByInterests(ctx: MutationCtx, panelId: Id<"users">)
 
   const best = (with_: Id<"users">[], interests: string[]) => {
     let pick: Candidate | undefined;
-    let score = 0;
+    let score = minShared - 1;
     for (const c of pool) {
       if (with_.some((id) => seen.has(pairKey(id, c.user._id)))) continue;
       const n = overlap(c.interests, interests).length;
@@ -319,6 +320,8 @@ export const applyMatch = internalMutation({
       }
       for (const a of group) for (const b of group) if (a !== b) seen.add(pairKey(a.user._id, b.user._id));
     }
+    // People Claude left out who clearly share interests (2+) still get an idea.
+    await proposeByInterests(ctx, panelId, 2);
     return null;
   },
 });

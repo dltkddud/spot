@@ -13,7 +13,7 @@ which checks every group again against the line as it is then.
 - Fewer than 2 people free to group: nothing is sent.
 - Missing key, error, timeout or an unusable reply: shared-interest matching (`huddles.proposeByInterests`),
   shown as "Based on shared interests".
-- Claude returns no groups: no huddle. An honest empty answer is kept.
+- People Claude leaves out (or when Claude returns no groups) are still paired by shared interests when two of them share 2+ interests, shown as "Based on shared interests".
 
 Rules kept from before: at most 3 people, only people with "Open to huddles" on, two people suggested
 together for a speaker are never suggested again (`neverTogether`), a huddle breaks up when a member

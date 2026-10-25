@@ -4,7 +4,7 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-25 05:00 PT
+마지막 업데이트: 2026-10-25 05:20 PT
 
 ---
 
@@ -299,6 +299,7 @@ src/
 - [x] 사진 옆 점은 활동 표시: 초록(15분 안 업데이트) / 노랑(15분 넘음, may have moved) / 빨강(떠남). 상태(Free to talk 등)는 옆 알약에만
 - [x] 15분 규칙 데모: Jimin은 항상 15분 넘음(흐림·may have moved·Still here?), Logan은 항상 방금 업데이트. 옆에 15분 안내 문구
 - [x] 로그아웃한 사람은 목록·지도·Huddle 후보에서 숨김, 요청 막기. 다시 로그인하면 같은 사람으로 돌아옴
+- [x] Claude가 Huddle을 안 만든 사람도 관심사가 2개 이상 겹치면 Speaker에게 Huddle 아이디어(Based on shared interests)
 
 ## 6. 다른 컴퓨터에서 처음 시작하기
 
@@ -515,3 +516,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/25 04:10 사진 옆 점을 활동 표시로(초록·노랑 15분 넘음·빨강 떠남)
 - 10/25 04:45 Huddle을 Speaker가 결정(Claude 추천 → Speaker Ask them/Skip → 게스트 수락, 예시 사람 자동 Yes), 기다리는 쪽 "Stay where you are" 문구
 - 10/25 05:00 로그아웃한 사람 숨기기(users.loggedOut, profiles.logOut, 다시 Log in 하면 해제). 로컬에서 로그아웃 → 목록에서 빠짐·요청 막힘 → 재로그인 → 다시 보임 확인
+- 10/25 05:20 Claude가 빈 답(그룹 없음)을 주면 Huddle 아이디어가 아예 안 뜨던 문제: Claude가 뺀 사람끼리 관심사 2개 이상 겹치면 관심사 기준으로 묶음(applyMatch → proposeByInterests(minShared 2)). 로컬에서 빈 답 → 제안 생성 확인
