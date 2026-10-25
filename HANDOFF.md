@@ -4,7 +4,7 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-25 03:30 PT
+마지막 업데이트: 2026-10-25 03:40 PT
 
 ---
 
@@ -103,7 +103,7 @@ Anthropic 트랙은 Devpost 목록에 아직 없어서 Slack Anthropic 채널에
               └─ convex/*.ts  (Convex 서버)
 ```
 - **하단 탭**: 게스트는 Explore / Requests / Me, 패널은 Now / Explore / Requests / Me.
-  - Explore: 위쪽 People / Map 전환. People은 핵심부터: 내 위치, Leaving soon, Speakers(필터) → 보조: Your people, AI matches(카드 버튼 → 상대 페이지에서 Request to chat). Map은 평면도와 구역 목록. 구역·패널 상세도 Explore 탭 안. 패널 상세(`panelDetail`, 게스트 페이지도 같은 화면)는 구역·인상착의 바로 아래 요청 박스(Speaker면 #순서, 게스트면 "Request sent"), 떠난 패널이면 내 LinkedIn+메시지 카드. Map의 구역 카드에서 게스트는 다른 게스트에게 "Request to chat".
+  - Explore: 위쪽 People / Map 전환. People은 핵심부터: 내 위치, Leaving soon, Speakers(필터), Guests(같은 카드·필터, 대기 인원 없음. Jimin·Logan도 여기) → 보조: Your people, AI matches(카드 버튼 → 상대 페이지에서 Request to chat). Map은 평면도와 구역 목록. 구역·패널 상세도 Explore 탭 안. 패널 상세(`panelDetail`, 게스트 페이지도 같은 화면)는 구역·인상착의 바로 아래 요청 박스(Speaker면 #순서, 게스트면 "Request sent"), 떠난 패널이면 내 LinkedIn+메시지 카드. Map의 구역 카드에서 게스트는 다른 게스트에게 "Request to chat".
   - Requests: **Requests to you**(나에게 온 요청: Accept/Not now, We met/Didn't show. Speaker면 번호와 Huddle 묶음 카드, 게스트면 1:1) → Ready for you → In line("You're #2 · Dana leaves in 9 min", 게스트에게 보낸 건 "Waiting for … to accept") → Keep in touch → Earlier. 탭 배지 = 나에게 온 대기 요청 + 내가 보낸 열린 요청. 새 요청이 오면 "… wants to chat. See Requests." 배너.
   - Now: 패널 전용. 상태 큰 버튼, 떠나는 시간(10/30/60·직접 입력·Leaving now), 내 위치, Your line(Taking requests 스위치 + "N people are waiting" 요약, 누르면 Requests), People you missed. 떠난 뒤에는 "You've left" + I'm back.
   - 패널도 다른 패널에게 요청할 수 있다(자기 자신은 서버에서 막음). 게스트끼리도 1:1 요청 가능(패널 → 게스트는 서버에서 막음). Huddle은 **Speaker 줄에서만**(`proposeFor`가 받는 사람이 패널이 아니면 건너뜀): 같은 설명을 여러 번 하지 않게 하려는 기능.
@@ -289,6 +289,7 @@ src/
 
 ---
 - [x] 요청 받기를 Requests 탭으로(Now는 요약만), 게스트끼리 1:1 요청, 10분 대화 삭제
+- [x] Explore → People에 Guests 목록(Speakers 아래, 같은 형식)
 
 ## 6. 다른 컴퓨터에서 처음 시작하기
 
@@ -500,3 +501,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/25 02:45 Huddle을 Claude가 묶음(huddlesNode.match, reason·whyYou·sharedQuestion, prompts/huddle.md, 8초·실패 시 관심사 겹침)
 - 10/25 02:50 Explore 핵심 먼저(Speakers → Your people → AI matches), 패널 상세 요청 박스 위로·떠난 패널 페이지에 후속 메시지, 입력 안내 "Spot uses this to match you and form huddles.", 로딩 문구
 - 10/25 03:30 나에게 온 요청은 Requests 탭 "Requests to you"로(Now는 상태·떠나는 시간·요약), 게스트끼리 1:1 요청(Huddle은 Speaker만), 10분 대화(제안·타이머) 삭제·AI 매치 카드는 Request to chat으로
+- 10/25 03:40 Explore → People의 Speakers 아래에 Guests 목록(같은 필터·카드, 누르면 프로필 → Request to chat)

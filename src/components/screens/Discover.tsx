@@ -72,20 +72,20 @@ function LeavingBoard() {
   );
 }
 
-// Explore → People: my connections, leaving soon, picks, and every speaker.
-export function ExplorePeople() {
+// Speakers or guests at this event, with the same filters and cards.
+function PeopleList({ role }: { role: "panel" | "attendee" }) {
   const { state, me, navigate } = useApp();
   const [filter, setFilter] = useState<string>("All");
 
-  const panels = useMemo(
-    () => state.users.filter((u) => u.role === "panel" && u.visible && u.id !== me?.id),
-    [state.users, me?.id],
+  const people = useMemo(
+    () => state.users.filter((u) => u.role === role && u.visible && u.id !== me?.id),
+    [state.users, role, me?.id],
   );
 
   if (!me) return null;
 
   const filters = ["All", "Free now", ...me.interests];
-  const shown = panels
+  const shown = people
     .filter((p) =>
       filter === "All" ? true : filter === "Free now" ? p.status === "available" : p.interests.includes(filter),
     )
@@ -93,17 +93,11 @@ export function ExplorePeople() {
       const rank = { available: 0, leaving: 1, talking: 2 } as const;
       return rank[a.status] - rank[b.status];
     });
+  const what = role === "panel" ? "speakers" : "guests";
 
-  const open = (panelId: string) => navigate({ name: "panelDetail", panelId });
-
-  // Core first (where I am, who's leaving, every speaker), then connections
-  // and AI matches.
   return (
-    <div>
-      <MyBar />
-      <LeavingBoard />
-
-      <SectionTitle aside={`${panels.length} sharing today`}>Speakers</SectionTitle>
+    <>
+      <SectionTitle aside={`${people.length} sharing today`}>{role === "panel" ? "Speakers" : "Guests"}</SectionTitle>
       <div className="-mx-5 mb-3 flex gap-2 overflow-x-auto px-5 pb-1">
         {filters.map((f) => (
           <Chip key={f} selected={filter === f} onClick={() => setFilter(f)}>
@@ -113,16 +107,33 @@ export function ExplorePeople() {
       </div>
       <div className="space-y-3">
         {shown.map((p) => (
-          <PanelCard key={p.id} panel={p} onOpen={() => open(p.id)} />
+          <PanelCard key={p.id} panel={p} onOpen={() => navigate({ name: "panelDetail", panelId: p.id })} />
         ))}
         {shown.length === 0 && (
           <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">
-            {panels.length === 0
-              ? `No speakers are sharing their zone at ${state.event.name} yet. They'll show up here as soon as they join.`
+            {people.length === 0
+              ? `No ${what} are sharing their zone at ${state.event.name} yet. They'll show up here as soon as they join.`
               : "No one matches this filter right now. Try All."}
           </p>
         )}
       </div>
+    </>
+  );
+}
+
+// Explore → People: where I am, who's leaving, every speaker and guest,
+// then connections and AI matches.
+export function ExplorePeople() {
+  const { me } = useApp();
+  if (!me) return null;
+
+  return (
+    <div>
+      <MyBar />
+      <LeavingBoard />
+
+      <PeopleList role="panel" />
+      <PeopleList role="attendee" />
 
       <div className="mt-7">
         <YourPeople />

@@ -313,9 +313,10 @@ export function PanelCard({ panel, onOpen }: { panel: User; onOpen: () => void }
         <span className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
           <StatusPill user={panel} now={state.now} />
           <ZoneBadge zone={zone} />
-          <span className="text-xs text-muted">
-            {waiting > 0 ? `${waiting} waiting` : "No one waiting"}
-          </span>
+          {/* Guests talk 1:1, so they have no line to count. */}
+          {panel.role === "panel" && (
+            <span className="text-xs text-muted">{waiting > 0 ? `${waiting} waiting` : "No one waiting"}</span>
+          )}
         </span>
         <span className="mt-1.5 block text-xs text-muted">
           Look for <span className="font-semibold text-ink">{panel.outfit}</span>
