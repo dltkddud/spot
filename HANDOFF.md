@@ -176,6 +176,7 @@ src/
 | `events.join` | mutation | 행사 참가(역할, 발표 제목, 인상착의, 지도 공개). 이미 있으면 그 참가 id |
 | `users.update` | mutation | 구역, 인상착의, 공개 범위, 요청 일시정지, 역할, 발표 제목. Speaker→Guest면 줄을 닫음 |
 | `users.setStatus` | mutation | 대화 가능/대화 중/떠남(`leavingInMin`). 떠남이면 예약 2개 생성 |
+| `users.askStillHere` / `confirmStillHere` | mutation | 오래된 구역에 "Still here?" 묻기(`stillHereAskedAt`, 답하기 전엔 한 번만) / 같은 구역 그대로 확인. 다른 업데이트(구역·상태·떠남·행사 종료)도 질문을 지움 |
 | `users.listByEvent` | query | 행사 참가자 전체에 프로필을 붙여서. `visible`은 보는 사람 기준(모두 공개, 또는 연결된 사람에게만 공개인데 내 프로필과 연결됨). 안 보이면 구역을 지워서 |
 | `connections.connectByCode` | mutation | 친구 코드 입력·초대 링크로 프로필끼리 연결 (코드를 건넨 쪽이 동의한 것으로 봄) |
 | `connections.remove` / `demoFriends` | mutation | 연결 끊기 / 데모 친구 2명(Maya, Leo) 연결 |
@@ -243,6 +244,7 @@ src/
 - [x] Connections: 연결 코드·초대 링크, 위치 공개 범위(Everyone / Only my connections / No one), Your people, Zones 표시, 데모 버튼
 - [x] 구역 아이콘 통일: Pavilion 텐트, Atrium 기둥 홀, Breakouts 1–4 문 2개, Broadway 복도·화살표, Broadway 3 출입문, Breakouts 5–7 문 3개, Theater 무대·커튼
 - [x] 노트북용 휴대폰 화면 프레임 (라이트·다크, 낮은 화면 축소, 폰에서는 전체 화면)
+- [x] Still here? 다시 추가 (새 방식): 오래된 구역에 게스트가 "Still here?" → 상대 화면 위에 "Still here / I moved" 알림 → 답하면 물어본 사람에게 배너
 - [ ] 폰 홈 화면 앱(PWA) (8-5)
 - [ ] Stage 6-1: 패널 쪽 3줄 브리핑 (8-6)
 - [ ] Stage 6-2: 놓쳤을 때 후속 메시지 (8-6)
@@ -447,3 +449,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/24 07:21 팀 피드백 2: 탭 정리(게스트 Explore/Requests/Me, 패널 Now 추가), Explore에 People/Map 전환, Huddle은 Requests로, 패널끼리 요청 가능
 - 10/24 07:43 팀 피드백 3: profiles 분리·여러 행사·행사별 역할·Edit profile·LinkedIn, 마이그레이션 profiles-and-events-v1, 예시 행사 2개
 - 10/24 09:59 팀 피드백 4: 떠난 패널의 LinkedIn + Claude(haiku 5.5) 후속 메시지 초안·Copy, Speaker→Guest 때도 같은 흐름, 데모 "leaves now" 버튼
+- 10/24 19:51 PanelDetail의 "may have moved" 문구를 "Still here?" 버튼으로 교체, 상대에게 Still here / I moved 알림, 답하면 물어본 사람에게 배너 (users.stillHereAskedAt 추가)
