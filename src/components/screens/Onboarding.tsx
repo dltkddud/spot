@@ -346,7 +346,7 @@ export function JoinEvent({ eventId }: { eventId: string }) {
         <Header title={event?.name ?? "Join the event"} onBack={back} />
         <main className="px-5 pb-10 pt-6">
           <h2 className="text-2xl font-black">How are you here at this event?</h2>
-          <p className="mt-2 text-muted">It can be different at every event. You can change it later.</p>
+          <p className="mt-2 text-muted">It can be different at every event. It stays the same for this event.</p>
           <div className="mt-6">
             <RolePicker role={draft.role} onChange={(role) => setDraft({ ...draft, role })} />
           </div>

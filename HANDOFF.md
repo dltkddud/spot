@@ -4,7 +4,7 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-25 05:20 PT
+마지막 업데이트: 2026-10-25 05:40 PT
 
 ---
 
@@ -119,7 +119,7 @@ Anthropic 트랙은 Devpost 목록에 아직 없어서 Slack Anthropic 채널에
   - `users.listByEvent`가 참가 기록에 프로필을 붙여서 돌려주므로, 화면의 `User`는 예전처럼 이름·관심사까지 다 들어 있다.
   - 연결(`profileConnections`)은 프로필끼리라, 한 번 연결하면 같이 들어간 모든 행사에서 구역이 공유된다.
 - **간단 로그인**: 비밀번호 없음. LinkedIn이 필수이고 사람마다 하나라서(`profiles.by_linkedin`, `cleanLinkedin`이 http·www·끝 슬래시·?쿼리·대소문자를 하나로 맞춤) Welcome → "I already have a profile. Log in"에서 LinkedIn 주소로 프로필을 다시 찾는다(`profiles.logIn`). 브라우저는 localStorage `spot.profileId`(내 프로필)와 `spot.eventId`(마지막으로 본 행사)를 기억한다. Me 맨 아래 **Log out**은 `profiles.logOut`으로 내 모든 참가 기록에 `loggedOut`을 표시하고(목록·지도·Huddle 후보에서 빠지고 요청도 막힘) `spot.profileId`를 지우고 Welcome으로 돌아간다. 다시 Log in 하거나 그 참가로 구역·상태를 바꾸면 표시가 지워져 원래 자리로 돌아온다. 예전 브라우저에 `spot.myUserId`(참가 id)만 있으면 `profiles.claimFromParticipation`이 그 참가 기록의 프로필로 이어 준다.
-- **화면 흐름**: Welcome → 프로필 만들기(처음 한 번, 또는 Log in) → Events 목록 → 행사 들어가기 → 역할 선택 → (Speaker면 발표 제목) → 인상착의 → 구역 선택. 홈 위쪽 헤더에 행사 이름과 역할(Speaker/Guest), 누르면 Events 목록. Me → Edit profile에서 공통 정보와 이 행사 정보를 고친다. Speaker → Guest로 바꿀 때 줄에 사람이 있으면 화면에서 확인을 받고, 그 요청들은 떠났을 때와 같이 missed가 된다.
+- **화면 흐름**: Welcome → 프로필 만들기(처음 한 번, 또는 Log in) → Events 목록 → 행사 들어가기 → 역할 선택 → (Speaker면 발표 제목) → 인상착의 → 구역 선택. 홈 위쪽 헤더에 행사 이름과 역할(Speaker/Guest), 누르면 Events 목록. Me → Edit profile에서 공통 정보와 이 행사 정보를 고친다. 역할(Speaker/Guest)은 행사에 들어갈 때 정하면 그 행사 동안 바뀌지 않는다(화면엔 "You're a Speaker here" 표시만, 서버 `users.update`도 다른 역할이면 거절).
 - **행사 여러 개**: `mockData.ts`의 `EVENTS`(Cal Hacks 13.0, Founders & Coffee SF, Bay Area Robotics Expo). 앱을 열면 `seed.ensure`가 key로 찾아 없으면 만들고(구역·예시 사람 포함), 있으면 이름·시간·구역·예시 프로필을 맞추고 없는 예시 사람만 새로 넣는다. 예시 사람은 Cal Hacks의 게스트 Jimin Kim·Logan Kim 2명뿐이고 예시 요청은 없다. 행사마다 종료 시각과 종료 정리 예약이 따로다. 평면도는 `floorPlan`이 있는 행사(Cal Hacks)만, 나머지는 Map에서 구역 목록만.
 
 **폴더**
@@ -300,6 +300,7 @@ src/
 - [x] 15분 규칙 데모: Jimin은 항상 15분 넘음(흐림·may have moved·Still here?), Logan은 항상 방금 업데이트. 옆에 15분 안내 문구
 - [x] 로그아웃한 사람은 목록·지도·Huddle 후보에서 숨김, 요청 막기. 다시 로그인하면 같은 사람으로 돌아옴
 - [x] Claude가 Huddle을 안 만든 사람도 관심사가 2개 이상 겹치면 Speaker에게 Huddle 아이디어(Based on shared interests)
+- [x] 한 행사에서 역할 고정(Speaker↔Guest 전환 삭제)
 
 ## 6. 다른 컴퓨터에서 처음 시작하기
 
@@ -517,3 +518,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/25 04:45 Huddle을 Speaker가 결정(Claude 추천 → Speaker Ask them/Skip → 게스트 수락, 예시 사람 자동 Yes), 기다리는 쪽 "Stay where you are" 문구
 - 10/25 05:00 로그아웃한 사람 숨기기(users.loggedOut, profiles.logOut, 다시 Log in 하면 해제). 로컬에서 로그아웃 → 목록에서 빠짐·요청 막힘 → 재로그인 → 다시 보임 확인
 - 10/25 05:20 Claude가 빈 답(그룹 없음)을 주면 Huddle 아이디어가 아예 안 뜨던 문제: Claude가 뺀 사람끼리 관심사 2개 이상 겹치면 관심사 기준으로 묶음(applyMatch → proposeByInterests(minShared 2)). 로컬에서 빈 답 → 제안 생성 확인
+- 10/25 05:40 한 행사에서 역할 고정: Edit profile의 역할 선택 삭제(표시만), users.update가 다른 역할 거절, 참가 화면 문구 "It stays the same for this event." 같은 이름이 Guests에 또 보이면 다른 LinkedIn으로 만든 다른 계정이라 admin.removeParticipants로 지움

@@ -9,7 +9,6 @@ import {
   MatchInputFields,
   ProfileFields,
   profileReady,
-  RolePicker,
   toProfileInput,
   type EventDraft,
   type MatchDraft,
@@ -33,20 +32,9 @@ export function EditProfile() {
     outfit: me?.outfit ?? "",
   });
   const [match, setMatch] = useState<MatchDraft>({ learnToday: me?.learnToday ?? "", canShare: me?.canShare ?? "" });
-  const [confirming, setConfirming] = useState(false);
   if (!profile || !me) return null;
 
-  // Speaker → guest closes the line, so check first if anyone is in it.
-  const inLine = state.requests.filter(
-    (r) => r.panelId === me.id && (r.status === "waiting" || r.status === "accepted"),
-  ).length;
-  const closesLine = me.role === "panel" && here.role === "attendee" && inLine > 0;
-
   const save = () => {
-    if (closesLine && !confirming) {
-      setConfirming(true);
-      return;
-    }
     if (!here.role) return;
     dispatch({
       type: "saveProfile",
@@ -69,13 +57,11 @@ export function EditProfile() {
         <ProfileFields value={draft} onChange={setDraft} />
 
         <SectionTitle aside="Only this event">At {state.event.name}</SectionTitle>
-        <RolePicker
-          role={here.role}
-          onChange={(role) => {
-            setHere({ ...here, role });
-            setConfirming(false);
-          }}
-        />
+        {/* The role is set when joining and stays for the whole event. */}
+        <p className="rounded-2xl border border-line bg-surface p-4">
+          <span className="block font-extrabold">You&apos;re a {me.role === "panel" ? "Speaker" : "Guest"} here</span>
+          <span className="mt-1 block text-sm text-muted">Your role stays the same for this whole event.</span>
+        </p>
         <div className="mt-6">
           <EventFields value={here} onChange={setHere} />
         </div>
@@ -83,29 +69,9 @@ export function EditProfile() {
           <MatchInputFields value={match} onChange={setMatch} />
         </div>
 
-        {confirming ? (
-          <section className="mt-8 rounded-2xl border-2 border-soon bg-soon-soft p-4">
-            <p className="font-extrabold text-soon-ink">
-              {inLine} {inLine === 1 ? "person is" : "people are"} in your line
-            </p>
-            <p className="mt-1 text-sm">
-              If you switch to guest, your line closes as if you&apos;d left. They&apos;ll see your LinkedIn and a
-              message they can send you.
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Button variant="secondary" className="px-3 text-sm" onClick={() => setConfirming(false)}>
-                Keep my line
-              </Button>
-              <Button className="px-3 text-sm" disabled={!profileReady(draft) || !eventReady(here)} onClick={save}>
-                Switch and save
-              </Button>
-            </div>
-          </section>
-        ) : (
-          <Button block icon="check" className="mt-8" disabled={!profileReady(draft) || !eventReady(here)} onClick={save}>
-            Save
-          </Button>
-        )}
+        <Button block icon="check" className="mt-8" disabled={!profileReady(draft) || !eventReady(here)} onClick={save}>
+          Save
+        </Button>
       </main>
     </>
   );

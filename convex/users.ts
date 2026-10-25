@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { OUTFIT_WORD_LIMIT } from "../src/lib/mockData";
 import { LEAVING_MIN_MAX } from "../src/lib/time";
-import { closeLine, scheduleLeaving } from "./leaving";
+import { scheduleLeaving } from "./leaving";
 import type { Doc, Id } from "./_generated/dataModel";
 
 // users holds one person's part in one event (role, outfit, zone, status).
@@ -25,8 +25,9 @@ export function cleanOutfit(outfit: string) {
   return trimmed;
 }
 
-// My part in this event: zone, outfit, who sees me, request pause, role and
-// talk title. Only the fields passed are changed.
+// My part in this event: zone, outfit, who sees me, request pause and talk
+// title. Only the fields passed are changed. The role is set when joining and
+// stays for the whole event, so one person is never both a speaker and a guest.
 export const update = mutation({
   args: {
     id: v.id("users"),
@@ -47,9 +48,9 @@ export const update = mutation({
       const zone = await ctx.db.get("zones", zoneId);
       if (!zone || zone.eventId !== user.eventId) throw new ConvexError("Zone not found.");
     }
-    // A speaker becoming a guest: their line closes as if they'd left.
-    const stopsSpeaking = role === "attendee" && user.role === "panel";
-    if (stopsSpeaking) await closeLine(ctx, id);
+    if (role !== undefined && role !== user.role) {
+      throw new ConvexError("Your role at this event can't change.");
+    }
 
     await ctx.db.patch("users", id, {
       ...(zoneId !== undefined && { zoneId }),
@@ -58,9 +59,7 @@ export const update = mutation({
       ...(shareWith !== undefined && { shareWith, visible: shareWith === "everyone" }),
       ...(shareWith === undefined && visible !== undefined && { visible, shareWith: visible ? "everyone" : "nobody" }),
       ...(requestsPaused !== undefined && { requestsPaused }),
-      ...(role !== undefined && { role }),
       ...(talkTitle !== undefined && { talkTitle: talkTitle.trim() || undefined }),
-      ...(stopsSpeaking && { status: "available" as const, leavingAt: undefined, requestsPaused: false }),
       // Any update answers a pending "Still here?", and means I'm back if I'd left.
       stillHereAskedAt: undefined,
       // Updating from a phone that's still logged in means I'm on Spot.

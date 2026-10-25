@@ -781,7 +781,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 contactUrl: profile.contactUrl ?? "",
               }),
               myUserId &&
-                updateUser({ id: myUserId as Id<"users">, role: here.role, talkTitle: here.talkTitle ?? "", outfit: here.outfit }),
+                updateUser({ id: myUserId as Id<"users">, talkTitle: here.talkTitle ?? "", outfit: here.outfit }),
               myUserId &&
                 setMatchInputs({ userId: myUserId as Id<"users">, learnToday: here.learnToday, canShare: here.canShare }),
             ]).then(() => {
