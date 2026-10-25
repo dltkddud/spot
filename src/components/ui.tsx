@@ -143,18 +143,34 @@ const statusStyles: Record<Status, string> = {
   leaving: "bg-soon-soft text-soon-ink",
 };
 
-const dotStyles: Record<Status, string> = {
+const statusDotStyles: Record<Status, string> = {
   available: "bg-go",
   talking: "bg-busy",
   leaving: "bg-soon",
 };
+
+// The dot on a photo is about activity, not status (the pill shows that):
+// green = updated in the last 15 min, yellow = no update since (may have moved),
+// red = their leaving time has passed (they left the event floor).
+type Activity = "active" | "stale" | "left";
+const dotStyles: Record<Activity, string> = { active: "bg-go", stale: "bg-soon", left: "bg-busy" };
+const dotLabels: Record<Activity, string> = {
+  active: "Updated in the last 15 min",
+  stale: "No update for 15+ min, may have moved",
+  left: "Left the event floor",
+};
+
+function activityOf(user: User, now: number): Activity {
+  if (user.status === "leaving" && user.leavingAt !== undefined && user.leavingAt <= now) return "left";
+  return isStale(user.updatedAt, now) ? "stale" : "active";
+}
 
 export function StatusPill({ user, now }: { user: User; now: number }) {
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[user.status]}`}
     >
-      <span className={`h-2 w-2 rounded-full ${dotStyles[user.status]}`} aria-hidden />
+      <span className={`h-2 w-2 rounded-full ${statusDotStyles[user.status]}`} aria-hidden />
       {statusLabel(user.status, user.leavingAt, now)}
     </span>
   );
@@ -171,6 +187,8 @@ export function ZoneBadge({ zone, size = "sm" }: { zone?: Zone; size?: "sm" | "l
 }
 
 export function Avatar({ user, size = 44 }: { user: User; size?: number }) {
+  const { state } = useApp();
+  const activity = activityOf(user, state.now);
   const initials = user.name
     .split(" ")
     .map((p) => p[0])
@@ -183,8 +201,10 @@ export function Avatar({ user, size = 44 }: { user: User; size?: number }) {
     >
       {initials}
       <span
-        className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-surface ${dotStyles[user.status]}`}
-        aria-hidden
+        className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-surface ${dotStyles[activity]}`}
+        title={dotLabels[activity]}
+        aria-label={dotLabels[activity]}
+        role="img"
       />
     </span>
   );
