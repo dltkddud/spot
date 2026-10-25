@@ -15,6 +15,7 @@ export function PanelNow() {
   const accepted = queue.filter((r) => r.status === "accepted");
   const waiting = queue.filter((r) => r.status === "waiting");
   const inLine = waiting.length + accepted.length;
+  const ideas = state.huddles.filter((h) => h.panelId === me.id && h.status === "suggested").length;
   const hasLeft = me.status === "leaving" && !!me.leavingAt && me.leavingAt <= state.now && !me.visible;
 
   if (hasLeft) {
@@ -110,7 +111,11 @@ export function PanelNow() {
                 ? `${waiting.length} ${waiting.length === 1 ? "person is" : "people are"} waiting`
                 : `${accepted.length} coming to you now`}
             </span>
-            <span className="block text-sm text-muted">Accept or decline in Requests</span>
+            <span className="block text-sm text-muted">
+              {ideas > 0
+                ? `Accept or decline, and ${ideas} huddle ${ideas === 1 ? "idea" : "ideas"} from Claude, in Requests`
+                : "Accept or decline in Requests"}
+            </span>
           </span>
           <Icon name="arrow" size={18} />
         </button>

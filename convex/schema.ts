@@ -160,7 +160,8 @@ export default defineSchema({
     eventId: v.id("events"),
     panelId: v.id("users"),
     status: v.union(
-      v.literal("proposed"), // waiting for everyone to say yes
+      v.literal("suggested"), // Claude's idea, waiting for the speaker to send it (guests don't see it yet)
+      v.literal("proposed"), // the speaker sent it; waiting for everyone to say yes
       v.literal("formed"), // everyone said yes; one place in line
       v.literal("met"),
       v.literal("declined"), // someone said "Not this time"

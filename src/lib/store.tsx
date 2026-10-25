@@ -138,6 +138,8 @@ type Action =
   | { type: "askStillHere"; userId: string }
   | { type: "confirmStillHere" }
   | { type: "huddleRespond"; huddleId: string; accept: boolean }
+  | { type: "sendHuddle"; huddleId: string }
+  | { type: "skipHuddle"; huddleId: string }
   | { type: "setHuddleStatus"; huddleId: string; status: "accepted" | "declined" | "met" | "missed" }
   | { type: "connectCode"; code: string }
   | { type: "removeConnection"; profileId: string }
@@ -305,6 +307,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const confirmStillHere = useMutation(api.users.confirmStillHere);
   const huddleRespond = useMutation(api.huddles.respond);
   const setHuddleStatus = useMutation(api.huddles.setGroupStatus);
+  const sendHuddle = useMutation(api.huddles.send);
+  const skipHuddle = useMutation(api.huddles.skip);
   const connectByCode = useMutation(api.connections.connectByCode);
   const removeConnection = useMutation(api.connections.remove);
   const leaveNow = useMutation(api.leaving.leaveNow);
@@ -644,9 +648,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!before && h.status === "proposed" && mine?.response === "pending") {
         localDispatch({
           type: "toast",
-          message: h.reason
-            ? `Huddle idea: meet ${panel} with ${others.join(" and ")}? ${h.reason}`
-            : `${others.join(" and ")} ${others.length > 1 ? "are" : "is"} into ${h.sharedInterests[0] ?? "the same things"} too. Meet ${panel} together?`,
+          message: `${panel} suggests meeting together with ${others.join(" and ")}. See Requests.`,
         });
       } else if (before === "proposed" && h.status === "formed") {
         localDispatch({ type: "toast", message: `Huddle ready. You'll meet ${panel} together.` });
@@ -654,6 +656,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     seen.loaded = true;
   }, [viewerId, users, myHuddles]);
+
+  // Banner for the speaker when Claude has a new huddle idea in their line.
+  const seenIdeas = useRef<{ viewerId: string; ids: Set<string>; loaded: boolean } | null>(null);
+  useEffect(() => {
+    if (!viewerId || !lineHuddles) return;
+    if (lineHuddles.some((h) => h.panelId !== viewerId)) return; // still showing the previous viewer's rows
+    if (seenIdeas.current?.viewerId !== viewerId) seenIdeas.current = { viewerId, ids: new Set(), loaded: false };
+    const seen = seenIdeas.current;
+    for (const h of lineHuddles) {
+      if (h.status !== "suggested" || seen.ids.has(h._id)) continue;
+      seen.ids.add(h._id);
+      if (seen.loaded) {
+        localDispatch({ type: "toast", message: `Claude suggests a huddle of ${h.members.length} in your line. See Requests.` });
+      }
+    }
+    seen.loaded = true;
+  }, [viewerId, lineHuddles]);
 
   // Banner when someone connects with me. Connections I made get their banner from the action.
   const seenLinks = useRef<{ profileId: string; ids: Set<string>; loaded: boolean } | null>(null);
@@ -827,6 +846,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (meId) run(confirmStillHere({ id: meId }));
           return;
 
+        case "sendHuddle":
+          if (meId) {
+            run(
+              sendHuddle({ huddleId: action.huddleId as Id<"huddles">, panelId: meId }).then(() =>
+                localDispatch({ type: "toast", message: "Sent. They'll each say yes or not this time." }),
+              ),
+            );
+          }
+          return;
+
+        case "skipHuddle":
+          if (meId) run(skipHuddle({ huddleId: action.huddleId as Id<"huddles">, panelId: meId }));
+          return;
+
         case "huddleRespond":
           if (meId) run(huddleRespond({ huddleId: action.huddleId as Id<"huddles">, userId: meId, accept: action.accept }));
           return;
@@ -929,6 +962,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confirmStillHere,
       huddleRespond,
       setHuddleStatus,
+      sendHuddle,
+      skipHuddle,
       connectByCode,
       removeConnection,
       createRequest,

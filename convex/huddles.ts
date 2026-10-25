@@ -7,8 +7,10 @@ import { closeWithoutChat } from "./followUps";
 
 // A huddle is 2-3 people in the same speaker's line who'd get more from
 // meeting the speaker together: Claude groups them from what they wrote
-// (huddlesNode.match), with shared interests as the fallback. Answers and line
-// position happen here; screens only read the queries at the bottom.
+// (huddlesNode.match), with shared interests as the fallback. The idea goes to
+// the speaker first ("suggested"); when they tap Ask them it goes to the guests
+// ("proposed"), and once everyone says yes it's one place in line ("formed").
+// Answers and line position happen here; screens only read the queries at the bottom.
 
 const MAX_MEMBERS = 3;
 
@@ -17,7 +19,7 @@ type Member = Doc<"huddleMembers">;
 // Someone waiting in a line, with the interests from their profile.
 type Candidate = { request: Doc<"chatRequests">; user: Doc<"users">; interests: string[] };
 
-const isOpen = (h: Huddle) => h.status === "proposed" || h.status === "formed";
+const isOpen = (h: Huddle) => h.status === "suggested" || h.status === "proposed" || h.status === "formed";
 const overlap = (a: string[], b: string[]) => a.filter((i) => b.includes(i));
 const pairKey = (a: Id<"users">, b: Id<"users">) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
@@ -92,7 +94,7 @@ async function lineState(ctx: QueryCtx, panelId: Id<"users">) {
     const members = await membersOf(ctx, huddle._id);
     for (const a of members) for (const b of members) if (a.userId !== b.userId) seen.add(pairKey(a.userId, b.userId));
     if (isOpen(huddle)) members.forEach((m) => busy.add(m.requestId));
-    if (huddle.status === "proposed") proposed.push({ huddle, members });
+    if (huddle.status === "suggested") proposed.push({ huddle, members });
   }
   return { seen, busy, proposed };
 }
@@ -124,8 +126,8 @@ export async function proposeFor(ctx: MutationCtx, panelId: Id<"users">) {
   await ctx.scheduler.runAfter(0, internal.huddlesNode.match, { panelId });
 }
 
-// The fallback when Claude isn't available: fills open suggestions first (up
-// to 3 people), then pairs the earliest waiting people with whoever shares the
+// The fallback when Claude isn't available: fills suggestions the speaker
+// hasn't sent yet first (up to 3 people), then pairs the earliest waiting people with whoever shares the
 // most interests. The same two people are never suggested twice for the same
 // speaker, and people who turned huddles off are skipped.
 export async function proposeByInterests(ctx: MutationCtx, panelId: Id<"users">) {
@@ -178,13 +180,12 @@ export async function proposeByInterests(ctx: MutationCtx, panelId: Id<"users">)
     const huddleId = await ctx.db.insert("huddles", {
       eventId: panel.eventId,
       panelId,
-      status: "proposed",
+      status: "suggested",
       sharedInterests: shared,
       source: "interests",
       createdAt: Date.now(),
     });
     for (const c of group) await addMember(ctx, huddleId, c);
-    await record(ctx, panel.eventId, "huddle_proposed", first.user._id, panelId);
   }
 }
 
@@ -299,7 +300,7 @@ export const applyMatch = internalMutation({
       const huddleId = await ctx.db.insert("huddles", {
         eventId: panel.eventId,
         panelId,
-        status: "proposed",
+        status: "suggested",
         sharedInterests: group.map((c) => c.interests).reduce((a, b) => overlap(a, b)),
         source: "claude",
         reason: g.reason,
@@ -317,7 +318,6 @@ export const applyMatch = internalMutation({
         pool.splice(pool.indexOf(c), 1);
       }
       for (const a of group) for (const b of group) if (a !== b) seen.add(pairKey(a.user._id, b.user._id));
-      await record(ctx, panel.eventId, "huddle_proposed", group[0].user._id, panelId);
     }
     return null;
   },
@@ -345,7 +345,7 @@ export async function afterRequestChange(ctx: MutationCtx, requestId: Id<"chatRe
 
 // The speaker is leaving: every open huddle in their line breaks up.
 export async function dissolveAllFor(ctx: MutationCtx, panelId: Id<"users">) {
-  for (const status of ["proposed", "formed"] as const) {
+  for (const status of ["suggested", "proposed", "formed"] as const) {
     const open = await ctx.db
       .query("huddles")
       .withIndex("by_panel_and_status", (q) => q.eq("panelId", panelId).eq("status", status))
@@ -353,6 +353,47 @@ export async function dissolveAllFor(ctx: MutationCtx, panelId: Id<"users">) {
     for (const h of open) await end(ctx, h, "dissolved");
   }
 }
+
+// The speaker taps "Ask them" on a suggested huddle: now the guests see it and
+// answer. Demo guests (Jimin, Logan) can't tap, so they say yes right away.
+export const send = mutation({
+  args: { huddleId: v.id("huddles"), panelId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { huddleId, panelId }) => {
+    const huddle = await ctx.db.get("huddles", huddleId);
+    if (!huddle || huddle.status !== "suggested") throw new ConvexError("This huddle idea has already changed.");
+    if (huddle.panelId !== panelId) throw new ConvexError("Only the speaker can do that.");
+    const members = await membersOf(ctx, huddleId);
+    const requests = await Promise.all(members.map((m) => ctx.db.get("chatRequests", m.requestId)));
+    if (requests.some((r) => !r || r.status !== "waiting")) {
+      await end(ctx, huddle, "dissolved");
+      await proposeFor(ctx, panelId);
+      throw new ConvexError("Someone in this huddle isn't waiting anymore.");
+    }
+    await ctx.db.patch("huddles", huddleId, { status: "proposed" });
+    for (const m of members) {
+      const user = await ctx.db.get("users", m.userId);
+      if (user?.seedKey) await ctx.db.patch("huddleMembers", m._id, { response: "yes" });
+    }
+    await record(ctx, huddle.eventId, "huddle_proposed", members[0].userId, panelId);
+    await formIfReady(ctx, huddleId);
+    return null;
+  },
+});
+
+// The speaker taps "Skip": the idea goes away, and the same people aren't
+// suggested together again.
+export const skip = mutation({
+  args: { huddleId: v.id("huddles"), panelId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { huddleId, panelId }) => {
+    const huddle = await ctx.db.get("huddles", huddleId);
+    if (!huddle || huddle.status !== "suggested") return null;
+    if (huddle.panelId !== panelId) throw new ConvexError("Only the speaker can do that.");
+    await end(ctx, huddle, "declined");
+    return null;
+  },
+});
 
 // "Huddle up" / "Not this time".
 export const respond = mutation({
@@ -413,7 +454,7 @@ const memberValidator = v.object({
 const huddleValidator = v.object({
   _id: v.id("huddles"),
   panelId: v.id("users"),
-  status: v.union(v.literal("proposed"), v.literal("formed")),
+  status: v.union(v.literal("suggested"), v.literal("proposed"), v.literal("formed")),
   sharedInterests: v.array(v.string()),
   source: v.union(v.literal("claude"), v.literal("interests")),
   reason: v.optional(v.string()),
@@ -428,7 +469,7 @@ async function view(ctx: QueryCtx, huddle: Huddle, viewer: { userId: Id<"users">
   return {
     _id: huddle._id,
     panelId: huddle.panelId,
-    status: huddle.status as "proposed" | "formed",
+    status: huddle.status as "suggested" | "proposed" | "formed",
     sharedInterests: huddle.sharedInterests,
     source: huddle.source ?? ("interests" as const),
     reason: huddle.reason,
@@ -455,21 +496,28 @@ export const forAttendee = query({
     const out = [];
     for (const m of rows) {
       const huddle = await ctx.db.get("huddles", m.huddleId);
-      if (huddle && isOpen(huddle)) out.push(await view(ctx, huddle, { userId: attendeeId }));
+      // Guests only hear about a huddle once the speaker sends it.
+      if (huddle && isOpen(huddle) && huddle.status !== "suggested") out.push(await view(ctx, huddle, { userId: attendeeId }));
     }
     return out;
   },
 });
 
-// Formed huddles in a speaker's line, shown to the speaker as one card each.
+// A speaker's huddles: Claude's ideas to send or skip, and formed huddles
+// (one card each in the line).
 export const forPanel = query({
   args: { panelId: v.id("users") },
   returns: v.array(huddleValidator),
   handler: async (ctx, { panelId }) => {
-    const formed = await ctx.db
-      .query("huddles")
-      .withIndex("by_panel_and_status", (q) => q.eq("panelId", panelId).eq("status", "formed"))
-      .take(50);
-    return await Promise.all(formed.map((h) => view(ctx, h, "speaker")));
+    const rows: Huddle[] = [];
+    for (const status of ["suggested", "formed"] as const) {
+      rows.push(
+        ...(await ctx.db
+          .query("huddles")
+          .withIndex("by_panel_and_status", (q) => q.eq("panelId", panelId).eq("status", status))
+          .take(50)),
+      );
+    }
+    return await Promise.all(rows.map((h) => view(ctx, h, "speaker")));
   },
 });

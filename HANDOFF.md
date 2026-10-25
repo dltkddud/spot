@@ -4,7 +4,7 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-25 04:10 PT
+마지막 업데이트: 2026-10-25 04:45 PT
 
 ---
 
@@ -229,6 +229,7 @@ src/
 **알림**: 앱 화면 안 배너(Toast)만 쓴다. 폰 푸시 알림 없음.
 
 **Huddle 설계**
+- **흐름(10/25 변경)**: Claude(실패 시 관심사 겹침)가 묶을 사람을 고르면 먼저 Speaker의 Requests에 "Huddle idea for your line"(`suggested`, 게스트에게는 안 보임)으로 뜬다. Speaker가 **Ask them**(`huddles.send`)을 누르면 게스트에게 제안(`proposed`)이 가고, 모두 Huddle up이면 `formed`. **Skip**(`huddles.skip`)은 `declined`로 끝나고 같은 사람끼리 다시 추천하지 않는다. 예시 사람(Jimin·Logan)은 Ask them 때 자동으로 Yes. Now 요약에 아이디어 개수, 새 아이디어가 오면 Speaker에게 배너.
 - 표: `huddles`(패널, 상태 proposed/formed/met/declined/dissolved, 겹치는 관심사), `huddleMembers`(멤버별 요청 id, 응답), `connections`(연결, 방향마다 한 줄).
 - 매칭(`proposeFor`)은 요청 생성·취소·거절, Huddle 거절, "Open to huddles" 켜기·관심사 수정 때 `huddlesNode.match`를 `runAfter(0)`로 예약한다. Claude가 같은 줄 사람들의 headline·관심사·learnToday·canShare·메모와 패널의 발표 제목을 보고 2~3명씩 묶는다(비슷한 관심 + 한쪽이 찾는 걸 다른 쪽이 줄 수 있는 보완 관계). 맞는 사람이 없으면 안 묶는다. 결과는 `applyMatch`가 줄 상태로 다시 검사해 넣는다.
 - 실패·8초 초과·키 없음이면 예전 방식(`proposeByInterests`): 진행 중인 제안(3명 미만, Claude가 만든 것 제외)에 합류, 그다음 오래 기다린 사람부터 관심사가 가장 많이 겹치는 사람과. 화면에 "Based on shared interests".
@@ -294,6 +295,7 @@ src/
 ---
 - [x] 요청 받기를 Requests 탭으로(Now는 요약만), 게스트끼리 1:1 요청, 10분 대화 삭제
 - [x] Explore → People에 Guests 목록(Speakers 아래, 같은 형식)
+- [x] Huddle은 Speaker가 Claude 추천을 보고 Ask them / Skip, 게스트 수락은 그대로. 요청을 수락한 쪽(기다리는 쪽)에 "Stay where you are · … is on the way to (구역)"
 - [x] 사진 옆 점은 활동 표시: 초록(15분 안 업데이트) / 노랑(15분 넘음, may have moved) / 빨강(떠남). 상태(Free to talk 등)는 옆 알약에만
 - [x] 15분 규칙 데모: Jimin은 항상 15분 넘음(흐림·may have moved·Still here?), Logan은 항상 방금 업데이트. 옆에 15분 안내 문구
 
@@ -510,3 +512,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/25 03:40 Explore → People의 Speakers 아래에 Guests 목록(같은 필터·카드, 누르면 프로필 → Request to chat)
 - 10/25 03:55 15분 규칙 데모: Jimin 항상 15분 넘음·Logan 항상 방금(1분 cron demoPeople.keepTimes), may have moved·Still here? 옆에 15분 안내 문구. 저장소 Public 전환 후 첫 자동 배포
 - 10/25 04:10 사진 옆 점을 활동 표시로(초록·노랑 15분 넘음·빨강 떠남)
+- 10/25 04:45 Huddle을 Speaker가 결정(Claude 추천 → Speaker Ask them/Skip → 게스트 수락, 예시 사람 자동 Yes), 기다리는 쪽 "Stay where you are" 문구

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { sharedInterests } from "@/lib/recommend";
 import { positionInQueue, queueFor, useApp } from "@/lib/store";
 import { FollowUp } from "../FollowUp";
-import { HuddleCard, huddleForRequest, PanelHuddleCard } from "../Huddle";
+import { HuddleCard, huddleForRequest, PanelHuddleCard, SuggestedHuddleCard } from "../Huddle";
 import { minutesAgo, timeLeftLabel } from "@/lib/time";
 import type { ChatRequest, Huddle } from "@/lib/types";
 import { Avatar, Button, Header, SectionTitle, StatusPill, ZoneBadge } from "../ui";
@@ -90,9 +90,11 @@ function RequestsToMe() {
   const queue = queueFor(state.requests, me.id);
   if (queue.length === 0) return null;
   const isSpeaker = me.role === "panel";
+  const myZone = state.zones.find((z) => z.id === me.zoneId);
   const accepted = queue.filter((r) => r.status === "accepted");
   const waiting = queue.filter((r) => r.status === "waiting");
   const formed = isSpeaker ? state.huddles.filter((h) => h.panelId === me.id && h.status === "formed") : [];
+  const ideas = isSpeaker ? state.huddles.filter((h) => h.panelId === me.id && h.status === "suggested") : [];
 
   // Each formed huddle shows once, in place of its members' requests.
   type Place = { r: ChatRequest; huddle?: undefined } | { huddle: Huddle; requests: ChatRequest[] };
@@ -119,6 +121,10 @@ function RequestsToMe() {
         </p>
       )}
       <div className="space-y-3">
+        {ideas.map((h) => (
+          <SuggestedHuddleCard key={h.id} huddle={h} />
+        ))}
+
         {places(accepted).map((p) => {
           if (p.huddle) return <PanelHuddleCard key={p.huddle.id} huddle={p.huddle} requests={p.requests} />;
           const r = p.r;
@@ -126,8 +132,11 @@ function RequestsToMe() {
           if (!a) return null;
           return (
             <div key={r.id} className="rounded-2xl border-2 border-go bg-surface p-4">
-              <p className="text-xs font-bold text-go-ink">Coming to you now</p>
-              <div className="mt-2 flex items-center gap-3">
+              <p className="text-lg font-black text-go-ink">Stay where you are</p>
+              <p className="text-sm text-muted">
+                {a.name.split(" ")[0]} is on the way{myZone ? ` to ${myZone.name}` : ""}.
+              </p>
+              <div className="mt-3 flex items-center gap-3">
                 <Avatar user={a} size={40} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-extrabold">{a.name}</p>

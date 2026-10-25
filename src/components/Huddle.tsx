@@ -108,7 +108,7 @@ export function HuddleCard({ huddle, compact }: { huddle: Huddle; compact?: bool
     <section className={shell}>
       <p className="flex items-center gap-2 text-xs font-bold text-primary-ink">
         <Icon name="users" size={16} />
-        Huddle idea
+        {first(panel)} suggests a huddle
       </p>
       <p className="mt-1 text-lg font-extrabold leading-snug">
         {huddle.source === "claude" || !topic
@@ -167,8 +167,9 @@ export function PanelHuddleCard({
   requests: ChatRequest[];
   place?: number;
 }) {
-  const { state, dispatch } = useApp();
+  const { state, me, dispatch } = useApp();
   const accepted = requests.every((r) => r.status === "accepted");
+  const myZone = state.zones.find((z) => z.id === me?.zoneId);
   const people = requests
     .map((r) => ({ r, user: state.users.find((u) => u.id === r.attendeeId) }))
     .filter((p): p is { r: ChatRequest; user: User } => !!p.user);
@@ -184,7 +185,15 @@ export function PanelHuddleCard({
           </span>
         )}
         <div className="min-w-0 flex-1">
-          {accepted && <p className="text-xs font-bold text-go-ink">Coming to you now</p>}
+          {accepted && (
+            <>
+              <p className="text-lg font-black text-go-ink">Stay where you are</p>
+              <p className="mb-2 text-sm text-muted">
+                {joinNames(people.map((p) => first(p.user)))} {people.length > 1 ? "are" : "is"} on the way
+                {myZone ? ` to ${myZone.name}` : ""}.
+              </p>
+            </>
+          )}
           <p className="flex items-center gap-1.5 font-extrabold">
             <Icon name="users" size={18} />
             <span>
@@ -241,6 +250,69 @@ export function PanelHuddleCard({
             </Button>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// The speaker's view of Claude's idea for their line, before the guests see
+// it: who, why, and the question they share. "Ask them" sends it; each guest
+// still says yes or not this time.
+export function SuggestedHuddleCard({ huddle }: { huddle: Huddle }) {
+  const { state, dispatch } = useApp();
+  const people = huddle.members
+    .map((m) => ({
+      m,
+      user: state.users.find((u) => u.id === m.userId),
+      r: state.requests.find((r) => r.id === m.requestId),
+    }))
+    .filter((p): p is typeof p & { user: User } => !!p.user);
+  return (
+    <div className="rounded-2xl border-2 border-dashed border-primary bg-primary-soft p-4">
+      <p className="flex items-center gap-1.5 text-xs font-bold text-primary-ink">
+        <Icon name="users" size={16} />
+        Huddle idea for your line
+      </p>
+      <p className="mt-1 text-lg font-extrabold leading-snug">
+        Meet {joinNames(people.map((p) => first(p.user)))} together?
+      </p>
+      {huddle.reason && <p className="mt-1 text-sm font-semibold leading-snug">{huddle.reason}</p>}
+      {huddle.sharedQuestion && (
+        <div className="mt-3 rounded-xl bg-surface p-3">
+          <p className="text-xs font-bold text-primary-ink">They all want to know:</p>
+          <p className="mt-0.5 font-bold leading-snug">{huddle.sharedQuestion}</p>
+        </div>
+      )}
+      {!huddle.reason && (
+        <div className="mt-2">
+          <InterestChips interests={huddle.sharedInterests} />
+        </div>
+      )}
+      <ul className="mt-3 space-y-3 rounded-xl bg-surface p-3">
+        {people.map(({ m, user, r }) => (
+          <li key={m.userId} className="flex items-start gap-3">
+            <Avatar user={user} size={36} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-bold">{user.name}</p>
+              <p className="truncate text-xs text-muted">{user.headline}</p>
+              {r?.note && <p className="mt-1.5 rounded-xl bg-surface-2 p-2.5 text-sm">&ldquo;{r.note}&rdquo;</p>}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2">
+        <AiTag claude={huddle.source === "claude"} />
+      </div>
+      <p className="mt-3 text-xs text-muted">
+        Ask them and each person says yes or not this time. If everyone says yes, they meet you together.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Button icon="users" className="px-3 text-sm" onClick={() => dispatch({ type: "sendHuddle", huddleId: huddle.id })}>
+          Ask them
+        </Button>
+        <Button variant="secondary" className="px-3 text-sm" onClick={() => dispatch({ type: "skipHuddle", huddleId: huddle.id })}>
+          Skip
+        </Button>
       </div>
     </div>
   );

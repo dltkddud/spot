@@ -131,11 +131,12 @@ export type HuddleMember = {
 
 // People in the same speaker's line who meet them together. Claude groups
 // them (reason for everyone, sharedQuestion for the speaker only), or shared
-// interests do when Claude isn't available.
+// interests do when Claude isn't available. "suggested" is only seen by the
+// speaker, who sends it to the guests ("proposed") or skips it.
 export type Huddle = {
   id: string;
   panelId: string;
-  status: "proposed" | "formed";
+  status: "suggested" | "proposed" | "formed";
   sharedInterests: string[];
   source: "claude" | "interests";
   reason?: string;
