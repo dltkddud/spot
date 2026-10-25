@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import {
   createContext,
@@ -19,6 +19,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { LEAVE_WARNING_MIN, minutesUntil } from "./time";
 import type {
   Activity,
+  AiMatches,
+  Match,
   ActivityType,
   ChatRequest,
   Connection,
@@ -53,7 +55,8 @@ export type Screen =
   | { name: "requests" }
   | { name: "panelNow" }
   | { name: "me" }
-  | { name: "editProfile" };
+  | { name: "editProfile" }
+  | { name: "matchInput" };
 
 export type ExploreView = "people" | "map";
 
@@ -72,6 +75,8 @@ export type JoinInput = {
   talkTitle?: string;
   outfit: string;
   visible: boolean;
+  learnToday?: string;
+  canShare?: string;
 };
 
 // Kept in the browser. Events, people and chat requests come from Convex.
@@ -105,6 +110,11 @@ type State = LocalState & {
   stats: Record<string, number>;
   // Profiles I'm connected with (they see my zone when I share with connections).
   connections: Connection[];
+  // My AI matches at this event, whether they're being found right now, and
+  // the 10-minute chats I'm in (suggested, agreed, running, or just finished).
+  aiMatches: AiMatches | null;
+  matchLoading: boolean;
+  matches: Match[];
 };
 
 type Action =
@@ -114,7 +124,20 @@ type Action =
   | { type: "createProfile"; profile: ProfileInput }
   | { type: "enterEvent"; eventId: string }
   | { type: "joinEvent"; eventId: string; join: JoinInput }
-  | { type: "saveProfile"; profile: ProfileInput; here: { role: Role; talkTitle?: string; outfit: string } }
+  | {
+      type: "saveProfile";
+      profile: ProfileInput;
+      here: { role: Role; talkTitle?: string; outfit: string; learnToday: string; canShare: string };
+    }
+  | { type: "saveMatchInputs"; learnToday: string; canShare: string }
+  | { type: "findMatches"; refresh: boolean }
+  | { type: "proposeMatch"; userId: string }
+  | { type: "dismissMatch"; userId: string }
+  | { type: "respondMatch"; matchId: string; accept: boolean }
+  | { type: "startMatch"; matchId: string }
+  | { type: "wrapUpMatch"; matchId: string; free: boolean }
+  | { type: "simulateMatchYes" }
+  | { type: "simulateMatchIncoming" }
   | { type: "updateMe"; patch: { zoneId?: string; outfit?: string; shareWith?: ShareWith; requestsPaused?: boolean; openToHuddles?: boolean } }
   | { type: "setStatus"; status: Exclude<Status, "leaving"> }
   | { type: "setLeaving"; minutes: number }
@@ -306,6 +329,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const createRequest = useMutation(api.chatRequests.create);
   const setRequestStatus = useMutation(api.chatRequests.setStatus);
   const demoLeaveNow = useMutation(api.leaving.demoLeaveNow);
+  const suggestMatches = useAction(api.matchesNode.suggest);
+  const setMatchInputs = useMutation(api.matches.setInputs);
+  const proposeMatch = useMutation(api.matches.propose);
+  const dismissMatch = useMutation(api.matches.dismiss);
+  const respondMatch = useMutation(api.matches.respond);
+  const startMatch = useMutation(api.matches.start);
+  const wrapUpMatch = useMutation(api.matches.wrapUp);
+  const leaveEventMatches = useMutation(api.matches.leaveEvent);
+  const demoMatchYes = useMutation(api.matches.demoTheySayYes);
+  const demoMatchIncoming = useMutation(api.matches.demoIncoming);
+  const [matchLoading, setMatchLoading] = useState(false);
 
   useEffect(() => {
     ensureSeed().catch((e) => console.error("Seeding failed", e));
@@ -373,6 +407,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const lineHuddles = useLatest(useQuery(api.huddles.forPanel, viewerId ? { panelId: viewerId } : "skip"));
   const summary = useLatest(useQuery(api.activity.summary, eventId ? { eventId: eventId as Id<"events"> } : "skip"));
   const myLinks = useLatest(useQuery(api.connections.mine, profileId ? { profileId } : "skip"));
+  const myMatches = useLatest(useQuery(api.matches.forMe, viewerId ? { userId: viewerId } : "skip"));
+  const aiMatches = useMemo<AiMatches | null>(
+    () =>
+      myMatches?.set
+        ? {
+            source: myMatches.set.source,
+            items: myMatches.set.items.map(({ otherId, ...s }) => ({ userId: otherId, ...s })),
+          }
+        : null,
+    [myMatches],
+  );
+  const matches = useMemo<Match[]>(
+    () =>
+      (myMatches?.matches ?? []).map((m) => ({
+        id: m._id,
+        fromId: m.fromId,
+        toId: m.toId,
+        status: m.status,
+        pairSummary: m.pairSummary,
+        reasonForFrom: m.reasonForFrom,
+        reasonForTo: m.reasonForTo,
+        questionForFrom: m.questionForFrom,
+        questionForTo: m.questionForTo,
+        basedOn: m.basedOn,
+        source: m.source,
+        createdAt: m.createdAt,
+        meetZoneId: m.meetZoneId,
+        startedAt: m.startedAt,
+        endsAt: m.endsAt,
+      })),
+    [myMatches],
+  );
   const stats = useMemo(() => summary ?? {}, [summary]);
 
   // While switching events the previous event's data is still showing; treat it as loading.
@@ -595,6 +661,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     seen.loaded = true;
   }, [profileId, myLinks]);
 
+  // Banners for 10-minute chats: someone suggests one to me, someone says yes
+  // to mine, the other person starts it, time runs out.
+  const seenMatches = useRef<{ viewerId: string; status: Map<string, string>; loaded: boolean } | null>(null);
+  useEffect(() => {
+    if (!viewerId || !users || !myMatches) return;
+    if (seenMatches.current?.viewerId !== viewerId) seenMatches.current = { viewerId, status: new Map(), loaded: false };
+    const seen = seenMatches.current;
+    for (const m of matches) {
+      const before = seen.status.get(m.id);
+      seen.status.set(m.id, m.status);
+      if (!seen.loaded || before === m.status) continue;
+      const other = users.find((u) => u.id === (m.fromId === viewerId ? m.toId : m.fromId));
+      const name = other?.name.split(" ")[0] ?? "Someone";
+      const zone = zones.find((z) => z.id === m.meetZoneId);
+      const message =
+        !before && m.status === "proposed" && m.toId === viewerId
+          ? `Spot thinks you and ${name} should talk. Have 10 minutes?`
+          : m.status === "accepted" && m.fromId === viewerId
+            ? `${name} said yes. Meet at ${zone?.name ?? "their zone"}.`
+            : m.status === "done"
+              ? `Time's up with ${name}.`
+              : null;
+      if (message) localDispatch({ type: "toast", message });
+    }
+    seen.loaded = true;
+  }, [viewerId, users, zones, myMatches, matches]);
+
   // Profiles made before connect codes existed get one when they open the app.
   const needsCode = !!profile && !profile.connectCode;
   useEffect(() => {
@@ -631,6 +724,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         case "enterEvent": {
           const mine = participations.find((p) => p.eventId === action.eventId);
+          // Going to another event: chats suggested or agreed here are off.
+          if (myUserId && event && action.eventId !== event.id) {
+            leaveEventMatches({ userId: myUserId as Id<"users"> }).catch(() => {});
+          }
           save(EVENT_KEY, action.eventId);
           localDispatch({
             type: "setEvent",
@@ -668,6 +765,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               }),
               myUserId &&
                 updateUser({ id: myUserId as Id<"users">, role: here.role, talkTitle: here.talkTitle ?? "", outfit: here.outfit }),
+              myUserId &&
+                setMatchInputs({ userId: myUserId as Id<"users">, learnToday: here.learnToday, canShare: here.canShare }),
             ]).then(() => {
               localDispatch({ type: "toast", message: "Profile saved." });
               localDispatch({ type: "resetTo", screen: { name: "me" } });
@@ -760,7 +859,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             demoFriends({ profileId: profileId as Id<"profiles">, ...at }).then(() =>
               localDispatch({
                 type: "toast",
-                message: "You're connected with Maya and Leo. You'll see them under Your people at Cal Hacks.",
+                message: "You're connected with Maya and Nina. You'll see them under Your people at Cal Hacks.",
               }),
             ),
           );
@@ -832,6 +931,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        case "saveMatchInputs":
+          if (!meId) return;
+          run(
+            setMatchInputs({ userId: meId, learnToday: action.learnToday, canShare: action.canShare }).then(() => {
+              localDispatch({ type: "resetTo", screen: { name: "explore" } });
+            }),
+          );
+          return;
+
+        case "findMatches":
+          if (!meId) return;
+          setMatchLoading(true);
+          run(suggestMatches({ userId: meId, refresh: action.refresh })).finally(() => setMatchLoading(false));
+          return;
+
+        case "proposeMatch":
+          if (meId) run(proposeMatch({ fromId: meId, toId: action.userId as Id<"users"> }));
+          return;
+
+        case "dismissMatch":
+          if (meId) run(dismissMatch({ userId: meId, otherId: action.userId as Id<"users"> }));
+          return;
+
+        case "respondMatch":
+          if (meId) run(respondMatch({ matchId: action.matchId as Id<"matches">, userId: meId, accept: action.accept }));
+          return;
+
+        case "startMatch":
+          if (meId) run(startMatch({ matchId: action.matchId as Id<"matches">, userId: meId }));
+          return;
+
+        case "wrapUpMatch":
+          if (meId) run(wrapUpMatch({ matchId: action.matchId as Id<"matches">, userId: meId, free: action.free }));
+          return;
+
+        case "simulateMatchYes":
+          if (meId) run(demoMatchYes({ userId: meId }));
+          return;
+
+        case "simulateMatchIncoming":
+          if (meId) run(demoMatchIncoming({ userId: meId }));
+          return;
+
         case "simulateLeaveNow":
           if (meId) run(demoLeaveNow({ attendeeId: meId }));
           return;
@@ -869,6 +1011,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createRequest,
       setRequestStatus,
       demoLeaveNow,
+      suggestMatches,
+      setMatchInputs,
+      proposeMatch,
+      dismissMatch,
+      respondMatch,
+      startMatch,
+      wrapUpMatch,
+      leaveEventMatches,
+      demoMatchYes,
+      demoMatchIncoming,
       resetDemo,
     ],
   );
@@ -899,6 +1051,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       huddles,
       stats,
       connections,
+      aiMatches,
+      matchLoading,
+      matches,
     };
     const me = users.find((u) => u.id === currentUserId);
     return {
@@ -924,6 +1079,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     huddles,
     stats,
     connections,
+    aiMatches,
+    matchLoading,
+    matches,
     dispatch,
   ]);
 

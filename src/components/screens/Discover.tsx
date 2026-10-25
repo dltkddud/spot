@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { localRecommendations } from "@/lib/recommend";
 import { useApp } from "@/lib/store";
 import { YourPeople } from "../Connections";
+import { AiMatches, MatchInbox } from "../Matches";
 import { minutesUntil } from "@/lib/time";
-import { Avatar, Chip, PanelCard, PillButton, SectionTitle, StatusPill, ZoneBadge } from "../ui";
+import { Chip, PanelCard, PillButton, SectionTitle, ZoneBadge } from "../ui";
 import { ZoneMark } from "../ZoneIcon";
 
 export function MyBar() {
@@ -73,14 +73,13 @@ function LeavingBoard() {
 
 // Explore → People: my connections, leaving soon, picks, and every speaker.
 export function ExplorePeople() {
-  const { state, me, navigate, dispatch } = useApp();
+  const { state, me, navigate } = useApp();
   const [filter, setFilter] = useState<string>("All");
 
   const panels = useMemo(
     () => state.users.filter((u) => u.role === "panel" && u.visible && u.id !== me?.id),
     [state.users, me?.id],
   );
-  const recs = useMemo(() => (me ? localRecommendations(me, panels, state.zones) : []), [me, panels, state.zones]);
 
   if (!me) return null;
 
@@ -94,49 +93,16 @@ export function ExplorePeople() {
       return rank[a.status] - rank[b.status];
     });
 
-  const open = (panelId: string, fromRec = false) => {
-    if (fromRec) dispatch({ type: "log", activityType: "click_recommendation", targetId: panelId });
-    navigate({ name: "panelDetail", panelId });
-  };
+  const open = (panelId: string) => navigate({ name: "panelDetail", panelId });
 
   return (
     <div>
+      {me.role === "attendee" && <MatchInbox />}
       <YourPeople />
       <MyBar />
       <LeavingBoard />
 
-      <SectionTitle aside="Based on your interests">Picked for you</SectionTitle>
-      {recs.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">
-          No strong matches free right now. Add more interests in Me, or browse everyone below.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {recs.map((r) => {
-            const p = panels.find((x) => x.id === r.panelId)!;
-            const zone = state.zones.find((z) => z.id === p.zoneId);
-            return (
-              <button
-                key={r.panelId}
-                onClick={() => open(p.id, true)}
-                className="w-full rounded-2xl border-2 border-primary bg-surface p-4 text-left transition duration-150 hover:shadow-md active:scale-[0.99]"
-              >
-                <span className="flex items-center gap-3">
-                  <Avatar user={p} size={40} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-extrabold">{p.name}</span>
-                    <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      <StatusPill user={p} now={state.now} />
-                      <ZoneBadge zone={zone} />
-                    </span>
-                  </span>
-                </span>
-                <span className="mt-3 block text-sm leading-relaxed">{r.reason}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <AiMatches />
 
       <SectionTitle aside={`${panels.length} sharing today`}>Everyone</SectionTitle>
       <div className="-mx-5 mb-3 flex gap-2 overflow-x-auto px-5 pb-1">

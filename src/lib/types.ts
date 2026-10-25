@@ -66,6 +66,49 @@ export type User = {
   openToHuddles?: boolean;
   // Who sees my zone. Others' visible is already worked out for me by the server.
   shareWith?: ShareWith;
+  // For AI matching, at this event: "What I want to learn today" / "What I can share".
+  learnToday?: string;
+  canShare?: string;
+};
+
+export type MatchDirection = "they_can_help_you" | "you_can_help_them" | "both";
+
+// One AI match, as shown to the person it was found for. userId is the other person.
+// basedOn lists the fields it rests on: "you.learnToday", "them.canShare", ...
+export type MatchSuggestion = {
+  userId: string;
+  direction: MatchDirection;
+  pairSummary: string;
+  reasonForMe: string;
+  reasonForThem: string;
+  questionForMe: string;
+  questionForThem: string;
+  basedOn: string[];
+};
+
+export type AiMatches = {
+  source: "claude" | "interests";
+  items: MatchSuggestion[];
+};
+
+// A suggested 10-minute chat. The AI text is written from the sender's side
+// ("you" in basedOn is fromId).
+export type Match = {
+  id: string;
+  fromId: string;
+  toId: string;
+  status: "proposed" | "accepted" | "declined" | "expired" | "started" | "done" | "cancelled";
+  pairSummary: string;
+  reasonForFrom: string;
+  reasonForTo: string;
+  questionForFrom: string;
+  questionForTo: string;
+  basedOn: string[];
+  source: "claude" | "interests" | "demo";
+  createdAt: number;
+  meetZoneId?: string;
+  startedAt?: number;
+  endsAt?: number;
 };
 
 export type ShareWith = "everyone" | "connections" | "nobody";
@@ -121,7 +164,10 @@ export type ActivityType =
   | "click_recommendation"
   | "huddle_proposed"
   | "huddle_formed"
-  | "connection_made";
+  | "connection_made"
+  | "match_suggested"
+  | "match_accepted"
+  | "match_completed";
 
 export type Activity = {
   id: string;
@@ -129,12 +175,6 @@ export type Activity = {
   userId: string;
   targetId?: string;
   createdAt: number;
-};
-
-export type Recommendation = {
-  panelId: string;
-  reason: string;
-  sharedInterests: string[];
 };
 
 export type Toast = {

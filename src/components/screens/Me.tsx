@@ -30,7 +30,7 @@ export function Me() {
     { label: "Accepted", value: count("accept_request") },
     { label: "Met", value: count("mark_met") },
     { label: "Missed", value: missed },
-    { label: "Picks opened", value: count("click_recommendation") },
+    { label: "AI matches accepted", value: state.stats.match_accepted ?? 0 },
     { label: "Huddles formed", value: huddlesFormed },
     { label: "Connections made", value: connectionsMade },
   ];
@@ -177,6 +177,12 @@ export function Me() {
               </Button>
               <Button variant="secondary" onClick={() => dispatch({ type: "simulateLeaveNow" })}>
                 A speaker I&apos;m waiting for leaves now
+              </Button>
+              <Button variant="secondary" onClick={() => dispatch({ type: "simulateMatchYes" })}>
+                Match: they say yes
+              </Button>
+              <Button variant="secondary" onClick={() => dispatch({ type: "simulateMatchIncoming" })}>
+                Match: incoming offer
               </Button>
             </div>
           )}

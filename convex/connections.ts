@@ -92,12 +92,12 @@ export const remove = mutation({
 });
 
 // Demo control: connect me with two demo guests at Cal Hacks, one of whom
-// shares their zone only with connections, so connecting is what reveals it.
+// (Nina) shares their zone only with connections, so connecting is what reveals it.
 export const demoFriends = mutation({
   args: { profileId: v.id("profiles"), ...atArgs },
   returns: v.null(),
   handler: async (ctx, { profileId, eventId, userId }) => {
-    for (const key of ["a-maya", "a-leo"]) {
+    for (const key of ["a-maya", "a-nina"]) {
       const friend = await ctx.db
         .query("profiles")
         .withIndex("by_seed_key", (q) => q.eq("seedKey", key))
