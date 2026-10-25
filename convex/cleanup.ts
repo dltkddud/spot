@@ -69,6 +69,11 @@ export async function deleteParticipations(ctx: MutationCtx, userIds: Set<Id<"us
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .take(10);
     for (const s of sets) await ctx.db.delete("matchSets", s._id);
+    const checks = await ctx.db
+      .query("huddleChecks")
+      .withIndex("by_panel", (q) => q.eq("panelId", userId))
+      .take(10);
+    for (const c of checks) await ctx.db.delete("huddleChecks", c._id);
   }
 
   // Other people's saved AI matches that suggest someone who is gone.

@@ -107,6 +107,12 @@ export const resetActivity = internalMutation({
         .withIndex("by_user", (q) => q.eq("userId", u._id))
         .take(10);
       for (const s of sets) await ctx.db.delete("matchSets", s._id);
+      // So Claude looks at the line again from scratch.
+      const checks = await ctx.db
+        .query("huddleChecks")
+        .withIndex("by_panel", (q) => q.eq("panelId", u._id))
+        .take(10);
+      for (const c of checks) await ctx.db.delete("huddleChecks", c._id);
     }
 
     let requests = 0;
