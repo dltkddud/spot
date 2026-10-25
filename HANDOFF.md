@@ -4,7 +4,7 @@
 > Claude Code는 `CLAUDE.md`를 통해 이 파일을 자동으로 읽습니다.
 > 단계를 끝낼 때마다 아래 **5. 진행 상황**과 **11. 진행 로그**를 업데이트해 주세요.
 
-마지막 업데이트: 2026-10-25 05:40 PT
+마지막 업데이트: 2026-10-25 06:00 PT
 
 ---
 
@@ -519,3 +519,4 @@ LinkedIn과 Instagram 링크는 내용을 가져오지 말고 연락처로만 �
 - 10/25 05:00 로그아웃한 사람 숨기기(users.loggedOut, profiles.logOut, 다시 Log in 하면 해제). 로컬에서 로그아웃 → 목록에서 빠짐·요청 막힘 → 재로그인 → 다시 보임 확인
 - 10/25 05:20 Claude가 빈 답(그룹 없음)을 주면 Huddle 아이디어가 아예 안 뜨던 문제: Claude가 뺀 사람끼리 관심사 2개 이상 겹치면 관심사 기준으로 묶음(applyMatch → proposeByInterests(minShared 2)). 로컬에서 빈 답 → 제안 생성 확인
 - 10/25 05:40 한 행사에서 역할 고정: Edit profile의 역할 선택 삭제(표시만), users.update가 다른 역할 거절, 참가 화면 문구 "It stays the same for this event." 같은 이름이 Guests에 또 보이면 다른 LinkedIn으로 만든 다른 계정이라 admin.removeParticipants로 지움
+- 10/25 06:00 중복 계정 정리: Cal Hacks에 Gabin Park가 Speaker·Guest 두 계정(LinkedIn 다름)으로 있어서 한 번만 도는 마이그레이션 remove-duplicate-gabin-guest-v1로 Guest 쪽 참가·프로필 삭제(Speaker 쪽이 있을 때만)

@@ -81,6 +81,37 @@ async function removeDemoPeople(ctx: MutationCtx) {
   await deleteProfiles(ctx, profileIds);
 }
 
+// Gabin Park signed up twice at Cal Hacks with two LinkedIns: once as a
+// speaker and once as a guest. The guest account goes (only if the speaker one
+// is there), and its profile too when it isn't at any other event.
+async function removeDuplicateGabinGuest(ctx: MutationCtx) {
+  const event = await ctx.db
+    .query("events")
+    .withIndex("by_key", (q) => q.eq("key", CAL_HACKS_KEY))
+    .first();
+  if (!event) return;
+  const isGabin = (p: Doc<"profiles"> | null) => p?.name.trim().toLowerCase() === "gabin park";
+  const speakers: Doc<"users">[] = [];
+  const guests: Doc<"users">[] = [];
+  for await (const u of ctx.db.query("users").withIndex("by_event", (q) => q.eq("eventId", event._id))) {
+    if (!u.profileId || !isGabin(await ctx.db.get("profiles", u.profileId))) continue;
+    (u.role === "panel" ? speakers : guests).push(u);
+  }
+  if (speakers.length === 0 || guests.length === 0) return;
+  const speakerProfiles = new Set(speakers.map((u) => u.profileId));
+  const dupes = guests.filter((u) => !speakerProfiles.has(u.profileId));
+  await deleteParticipations(ctx, new Set(dupes.map((u) => u._id)));
+  const profileIds = new Set<Id<"profiles">>();
+  for (const u of dupes) {
+    const elsewhere = await ctx.db
+      .query("users")
+      .withIndex("by_profile_and_event", (q) => q.eq("profileId", u.profileId!))
+      .first();
+    if (!elsewhere) profileIds.add(u.profileId!);
+  }
+  await deleteProfiles(ctx, profileIds);
+}
+
 // Starts over with real people only: every profile, participation, request,
 // huddle, AI match, connection and activity row goes, real sign-ups included.
 // Events and zones stay. The demo guests in mockData (Jimin, Logan) are put
@@ -204,6 +235,7 @@ export const ensure = mutation({
     await runOnce(ctx, "profiles-and-events-v1", () => profilesAndEvents(ctx));
     await runOnce(ctx, "remove-demo-people-v1", () => removeDemoPeople(ctx));
     await runOnce(ctx, "wipe-people-v1", () => wipePeople(ctx));
+    await runOnce(ctx, "remove-duplicate-gabin-guest-v1", () => removeDuplicateGabinGuest(ctx));
     for (const mock of EVENTS) await ensureEvent(ctx, mock);
     return null;
   },
