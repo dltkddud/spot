@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/lib/store";
 import type { Match, MatchSuggestion, User } from "@/lib/types";
-import { Avatar, Button, Icon, PillButton, RoleBadge, StatusPill, ZoneBadge } from "./ui";
+import { AiTag, Avatar, Button, Icon, PillButton, RoleBadge, StatusPill, ZoneBadge } from "./ui";
 
 const first = (u?: User) => u?.name.split(" ")[0] ?? "them";
 
@@ -44,12 +44,11 @@ export function BasedOn({
   source: "claude" | "interests" | "demo";
 }) {
   const labels = basedOn.map((b) => basisLabel(b, other, flip)).filter((l): l is string => !!l);
-  const text = source === "interests" ? "Based on shared interests" : `Based on: ${labels.join(" · ")}`;
-  if (source !== "interests" && labels.length === 0) return null;
+  if (source !== "claude") return <AiTag claude={false} />;
   return (
-    <p className="inline-flex items-start gap-1.5 rounded-xl border border-primary/40 bg-primary-soft px-2.5 py-1.5 text-xs font-bold text-primary-ink">
-      <Icon name="sparkle" size={14} />
-      <span>{text}</span>
+    <p className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-primary-ink">
+      <AiTag claude />
+      {labels.length > 0 && <span>Based on: {labels.join(" · ")}</span>}
     </p>
   );
 }

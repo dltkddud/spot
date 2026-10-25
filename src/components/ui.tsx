@@ -115,6 +115,21 @@ export function RoleBadge({ role }: { role: "panel" | "attendee" }) {
   );
 }
 
+// Says whether some text came from Claude or from the fallback rule, so the
+// screen alone shows whether Claude ran.
+export function AiTag({ claude, fallback = "Based on shared interests" }: { claude: boolean; fallback?: string }) {
+  return claude ? (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-bold text-on-primary">
+      <Icon name="sparkle" size={12} />
+      Claude
+    </span>
+  ) : (
+    <span className="inline-flex shrink-0 items-center rounded-full border border-line px-2 py-0.5 text-[11px] font-bold text-muted">
+      {fallback}
+    </span>
+  );
+}
+
 export function statusLabel(status: Status, leavingAt: number | undefined, now: number) {
   if (status === "available") return "Free to talk";
   if (status === "talking") return "In a conversation";

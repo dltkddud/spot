@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { linkHref } from "@/lib/links";
 import type { ChatRequest, User } from "@/lib/types";
-import { Icon, PillButton } from "./ui";
+import { AiTag, Icon, PillButton } from "./ui";
 
 // After a speaker leaves with me still in line: their LinkedIn, a message I can
 // send (drafted by Claude, or a template), and their other link.
@@ -58,8 +58,9 @@ export function FollowUp({ request, speaker }: { request: ChatRequest; speaker?:
               className="w-full resize-none bg-transparent text-sm leading-relaxed text-ink focus:outline-none"
             />
             <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="text-xs text-muted">
-                {draft.source === "claude" ? "Drafted by Claude. Edit it before you send." : "Edit it before you send."}
+              <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                <AiTag claude={draft.source === "claude"} fallback="Template" />
+                Edit it before you send.
               </span>
               <PillButton icon={copied ? "check" : "copy"} onClick={copy}>
                 {copied ? "Copied" : "Copy"}
