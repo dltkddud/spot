@@ -391,6 +391,27 @@ export function TabBar() {
   );
 }
 
+// Someone tapped "Still here?" on my zone. Stays up until I answer.
+function StillHerePrompt() {
+  const { state, me, screen, dispatch, navigate } = useApp();
+  if (!me || me.stillHereAskedAt === undefined || !me.zoneId || screen.name === "zonePicker") return null;
+  const zone = state.zones.find((z) => z.id === me.zoneId);
+  return (
+    <div role="alert" className="toast-in pointer-events-auto rounded-xl bg-board px-4 py-3 text-white shadow-lg">
+      <p className="text-sm font-bold">Someone is looking for you.</p>
+      <p className="mt-0.5 text-sm text-board-dim">Are you still at {zone?.name ?? "your zone"}?</p>
+      <div className="mt-3 flex gap-2">
+        <PillButton icon="check" onClick={() => dispatch({ type: "confirmStillHere" })}>
+          Still here
+        </PillButton>
+        <PillButton icon="pin" onClick={() => navigate({ name: "zonePicker" })}>
+          I moved
+        </PillButton>
+      </div>
+    </div>
+  );
+}
+
 export function Toasts() {
   const { state, dispatch } = useApp();
   const latest = state.toasts[state.toasts.length - 1]?.id;
@@ -403,6 +424,7 @@ export function Toasts() {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-[calc(var(--safe-top)+12px)] z-50 mx-auto flex max-w-[480px] flex-col gap-2 px-4">
+      <StillHerePrompt />
       {state.toasts.map((t) => (
         <div
           key={t.id}
